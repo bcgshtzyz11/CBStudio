@@ -1,0 +1,7 @@
+data/*
+!data/glyph_templates.json
+_dev/
+__pycache__/
+*.pyc
+*.log
+~\$*

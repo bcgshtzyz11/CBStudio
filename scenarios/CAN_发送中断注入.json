@@ -1,0 +1,133 @@
+{
+ "name": "CAN 发送中断注入",
+ "description": "CAN 随机发送启动后，分别断开发送 5s 再恢复，验证 DUT 对丢帧/恢复的容错（不碰电源）。",
+ "loops": 3,
+ "loop_interval_ms": 3000,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "tx",
+  "buses": [
+   "ican",
+   "pcan"
+  ],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1.0
+ },
+ "states": [
+  {
+   "id": "s1e95fc",
+   "name": "CAN 发送启动",
+   "channels": {},
+   "hold_ms": 1000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [
+    {
+     "type": "can_tx_start"
+    }
+   ],
+   "note": "剧本 can.mode=tx 时进入即自动开始发送"
+  },
+  {
+   "id": "s6e00e2",
+   "name": "ICAN 断开发送",
+   "channels": {
+    "ican": "off"
+   },
+   "hold_ms": 5000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "只暂停发送，接收与 DUT 其余逻辑不受影响"
+  },
+  {
+   "id": "s858534",
+   "name": "ICAN 恢复发送",
+   "channels": {
+    "ican": "on"
+   },
+   "hold_ms": 3000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s9b2a9a",
+   "name": "PCAN 断开发送",
+   "channels": {
+    "pcan": "off"
+   },
+   "hold_ms": 5000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s9a46a3",
+   "name": "PCAN 恢复发送",
+   "channels": {
+    "pcan": "on"
+   },
+   "hold_ms": 3000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s7a7fdc",
+   "name": "结束前停止发送",
+   "channels": {},
+   "hold_ms": 200,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [
+    {
+     "type": "can_tx_stop"
+    }
+   ],
+   "note": ""
+  }
+ ]
+}

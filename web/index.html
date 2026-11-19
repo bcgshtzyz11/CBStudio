@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CBStudio · 台架剧本工作台</title>
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">CB</span>
+    <div class="brand-text">
+      <b>台架剧本工作台</b>
+      <small>故障注入 · 抓取判定 · 现场保全</small>
+    </div>
+    <span class="sim-badge hidden" id="simBadge" title="模拟模式：不连接任何真实硬件">模拟</span>
+  </div>
+
+  <div class="runstate" id="runstate">
+    <span class="pill" id="phasePill">空闲</span>
+    <span class="run-meta">
+      <span id="runScenario">未载入剧本</span>
+      <span class="sep">·</span>
+      <span id="runIteration">第 0 轮</span>
+      <span class="sep">·</span>
+      <span id="runStateName">—</span>
+    </span>
+    <span class="run-clock" id="runClock">0.0s</span>
+  </div>
+
+  <div class="top-actions">
+    <button class="btn primary" id="btnStart" title="开始执行剧本（Space）">
+      <span class="ico">▶</span><span>运行</span>
+    </button>
+    <button class="btn" id="btnPause" title="暂停 / 恢复（P）">
+      <span class="ico" id="pauseIco">⏸</span><span id="pauseLabel">暂停</span>
+    </button>
+    <button class="btn danger" id="btnStop" title="停止（Esc）">
+      <span class="ico">■</span><span>停止</span>
+    </button>
+    <button class="btn warn" id="btnFreeze" title="立刻抓现场并保持不动电">
+      <span class="ico">⚡</span><span>保留现场</span>
+    </button>
+    <button class="btn ghost" id="btnSettings" title="设置（硬件 / 保全 / 保留策略）">⚙</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============================ 左：通道与采集 ============================ -->
+  <aside class="col col-left">
+    <section class="panel">
+      <div class="panel-head">
+        <h3>通道</h3>
+        <span class="hint" id="channelHint">继电器无回读，状态为推定值</span>
+      </div>
+      <div class="channel-list" id="channelList"></div>
+      <div class="preset-row">
+        <button class="btn tiny" data-preset="power_on">整机上电</button>
+        <button class="btn tiny" data-preset="soc_off">只掉 SOC</button>
+        <button class="btn tiny" data-preset="power_off">整机断电</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h3>采集</h3><span class="hint" id="probeHint"></span></div>
+      <div class="probe-list">
+        <div class="probe-row" id="probeSerial">
+          <span class="led"></span>
+          <div class="probe-main">
+            <b>DUT 串口</b>
+            <small id="probeSerialDetail">—</small>
+          </div>
+          <span class="probe-rate" id="probeSerialRate">0</span>
+        </div>
+        <div class="probe-row" id="probeAdb">
+          <span class="led"></span>
+          <div class="probe-main">
+            <b>SOC (adb)</b>
+            <small id="probeAdbDetail">—</small>
+          </div>
+          <span class="probe-rate" id="probeAdbRate">—</span>
+        </div>
+        <div class="probe-row" id="probeCan">
+          <span class="led"></span>
+          <div class="probe-main">
+            <b>CAN 引擎</b>
+            <small id="probeCanDetail">未连接</small>
+          </div>
+          <button class="btn tiny" id="btnCanConnect">连接</button>
+        </div>
+        <div class="probe-row" id="probePwr">
+          <span class="led"></span>
+          <div class="probe-main">
+            <b>电源状态</b>
+            <small id="probePwrDetail">等待 MCU 日志</small>
+          </div>
+          <span class="probe-rate" id="probePwrState">—</span>
+        </div>
+      </div>
+      <div class="can-buses" id="canBuses"></div>
+      <div class="stim-row">
+        <button class="btn tiny" data-stim="any" title="持续发普通帧：OFF→待机，并让网络不静默">任意帧</button>
+        <button class="btn tiny" data-stim="wake" title="发转向/双闪/BMS1充电/OTA 唤醒源：待机→监听">唤醒帧</button>
+        <button class="btn tiny" data-stim="silence" title="停掉全部激励，网络转静默">静默</button>
+      </div>
+      <div class="stim-row">
+        <button class="btn tiny" id="btnScreen" title="抓一帧仪表画面并预览">抓屏</button>
+        <button class="btn tiny ghost" id="btnScreenLast" title="查看最近一张画面">看画面</button>
+        <button class="btn tiny ghost" id="btnScreenBase" title="把当前画面的电压区域学成基线，供 screen_region 断言比对">学基线</button>
+        <span class="hint" id="screenHint"></span>
+      </div>
+      <div class="manual-tx">
+        <input class="mini-input" id="mtxId" placeholder="0x18FE4121" title="报文 ID">
+        <input class="mini-input" id="mtxData" placeholder="00 50 00 00 00 00 00 00" title="数据（十六进制）">
+        <input class="mini-input" id="mtxCount" type="number" min="1" value="1" title="发送次数" style="width:52px">
+        <button class="btn tiny" id="btnSendFrame" title="按 100ms 周期手动发送，不受发送闸门影响">发帧</button>
+      </div>
+    </section>
+
+    <section class="panel grow">
+      <div class="panel-head">
+        <h3>CAN 报文</h3>
+        <select class="mini-select" id="canBusSelect"></select>
+      </div>
+      <div class="id-table" id="canIdTable">
+        <div class="empty">连接 CAN 后显示接收统计</div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ============================ 中：剧本时间线 ============================ -->
+  <section class="col col-center">
+    <div class="scenario-bar">
+      <input class="scenario-name" id="scenarioName" placeholder="剧本名称">
+      <div class="scenario-meta">
+        <label class="field">
+          <span>循环</span>
+          <input type="number" min="0" id="scenarioLoops" title="0 = 无限循环">
+        </label>
+        <label class="field">
+          <span>轮间隔</span>
+          <input type="number" min="0" step="100" id="scenarioInterval" title="毫秒">
+          <em>ms</em>
+        </label>
+        <label class="field">
+          <span>CAN</span>
+          <select id="scenarioCanMode">
+            <option value="none">不启用</option>
+            <option value="tx">随机发送</option>
+            <option value="rx">只接收</option>
+          </select>
+        </label>
+        <label class="check" title="剧本主动断电期间，自动静默「掉线/静默」类监看，避免把预期掉电判成事故">
+          <input type="checkbox" id="scenarioMute"> 断电静默
+        </label>
+        <span class="estimate" id="scenarioEstimate"></span>
+      </div>
+      <div class="scenario-tools">
+        <select class="mini-select" id="scenarioFiles" title="载入已保存的剧本"></select>
+        <button class="btn tiny" id="btnScenarioLoad">载入</button>
+        <button class="btn tiny" id="btnScenarioSave">保存</button>
+        <button class="btn tiny" id="btnScenarioNew">新建</button>
+      </div>
+    </div>
+
+    <div class="timeline-wrap">
+      <div class="timeline" id="timeline"></div>
+      <div class="timeline-foot">
+        <button class="btn add-state" id="btnAddState">＋ 添加状态</button>
+        <span class="hint">拖动左侧 ⠿ 调整顺序 · 点卡片编辑 · Alt+↑/↓ 移动选中卡</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ 右：日志 / 事件 / 规则 ============================ -->
+  <aside class="col col-right">
+    <div class="tabs">
+      <button class="tab active" data-tab="logs">日志 <i id="tabLogCount">0</i></button>
+      <button class="tab" data-tab="incidents">事故 <i id="tabIncCount">0</i></button>
+      <button class="tab" data-tab="rules">监看</button>
+    </div>
+
+    <div class="tab-body" data-body="logs">
+      <div class="log-tools">
+        <div class="chips" id="logLevels">
+          <button class="chip active" data-level="all">全部</button>
+          <button class="chip" data-level="info">INFO</button>
+          <button class="chip" data-level="warn">WARN</button>
+          <button class="chip" data-level="error">ERROR</button>
+          <button class="chip" data-level="incident">事故</button>
+        </div>
+        <input class="mini-input" id="logSearch" placeholder="过滤文本 / 正则…">
+        <button class="btn tiny ghost" id="btnLogPause" title="暂停滚动">⏸</button>
+        <button class="btn tiny ghost" id="btnLogClear" title="清空视图">✕</button>
+        <button class="btn tiny ghost" id="btnLogExport" title="导出 CSV">⤓</button>
+      </div>
+      <div class="log-view" id="logView"></div>
+      <div class="log-foot">
+        <span id="logFoot">0 条</span>
+        <span class="hint" id="logDrop">串口抽样丢弃 0</span>
+      </div>
+    </div>
+
+    <div class="tab-body hidden" data-body="incidents">
+      <div class="inc-tools">
+        <button class="btn tiny" id="btnFreeze2">⚡ 立即抓现场</button>
+        <button class="btn tiny ghost" id="btnOpenRun">打开运行目录</button>
+        <span class="hint" id="incRunId"></span>
+      </div>
+      <div class="inc-list" id="incList"><div class="empty">还没有事故记录</div></div>
+    </div>
+
+    <div class="tab-body hidden" data-body="rules">
+      <div class="inc-tools">
+        <button class="btn tiny" id="btnRuleAdd">＋ 规则</button>
+        <button class="btn tiny primary" id="btnRuleSave">保存规则</button>
+        <span class="hint">命中即保全现场</span>
+      </div>
+      <div class="rule-list" id="ruleList"></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="statusbar">
+  <span class="dot" id="connDot"></span>
+  <span id="connText">连接中…</span>
+  <span class="sep">|</span>
+  <span id="statCounters">错误 0 · 告警 0</span>
+  <span class="sep">|</span>
+  <span id="statRunDir" class="mono">—</span>
+  <span class="spacer"></span>
+  <span id="statVersion">CBStudio</span>
+</footer>
+
+<!-- ============================ 状态卡编辑器 ============================ -->
+<div class="overlay hidden" id="stateModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="stateModalTitle">编辑状态</h2>
+      <button class="btn ghost" data-close="stateModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="field wide"><span>名称</span><input id="stName" placeholder="如：整机上电"></label>
+        <label class="field"><span>保持</span><input type="number" min="0" step="100" id="stHold"><em>ms</em></label>
+        <label class="field"><span>失败动作</span>
+          <select id="stOnFail">
+            <option value="continue">继续</option>
+            <option value="stop">停止剧本</option>
+            <option value="freeze">保全后停止</option>
+          </select>
+        </label>
+      </div>
+
+      <h4>通道</h4>
+      <div class="chan-matrix" id="stChannels"></div>
+
+      <h4>等待条件 <small>（在"保持"之后继续等，直到满足或超时）</small></h4>
+      <div class="form-row">
+        <label class="field"><span>类型</span>
+          <select id="stWaitType">
+            <option value="none">不等待</option>
+            <option value="adb_online">SOC 在线</option>
+            <option value="serial_match">串口出现</option>
+            <option value="can_frame">CAN 收到报文</option>
+            <option value="log_growing">日志在增长</option>
+            <option value="pwr_state">电源状态到达</option>
+          </select>
+        </label>
+        <label class="field wide" id="stWaitValueField"><span>值</span><input id="stWaitValue" placeholder="正则 / CAN ID"></label>
+        <label class="field" id="stWaitBusField"><span>总线</span><input id="stWaitBus" placeholder="ican"></label>
+        <label class="field" id="stWaitTimeoutField"><span>超时</span><input type="number" min="0" step="500" id="stWaitTimeout"><em>ms</em></label>
+      </div>
+
+      <h4>断言 <small>（窗口内必须成立，不成立即失败）</small></h4>
+      <div class="check-list" id="stChecks"></div>
+      <button class="btn tiny" id="btnAddCheck">＋ 添加断言</button>
+
+      <h4>进入动作</h4>
+      <div class="action-list" id="stActions"></div>
+      <button class="btn tiny" id="btnAddAction">＋ 添加动作</button>
+
+      <label class="field wide"><span>备注</span><input id="stNote" placeholder="可选：人读说明"></label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="stateModal">取消</button>
+      <button class="btn primary" id="btnStateApply">应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 规则编辑器 ============================ -->
+<div class="overlay hidden" id="ruleModal">
+  <div class="modal narrow">
+    <div class="modal-head">
+      <h2>监看规则</h2>
+      <button class="btn ghost" data-close="ruleModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="field wide"><span>名称</span><input id="ruName" placeholder="如：出现 ERROR"></label>
+        <label class="field"><span>级别</span>
+          <select id="ruSeverity"><option value="warn">warn</option><option value="error">error</option></select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label class="field"><span>类型</span>
+          <select id="ruType">
+            <option value="regex">串口正则命中</option>
+            <option value="silence">串口静默</option>
+            <option value="can_timeout">CAN 报文超时</option>
+            <option value="adb_offline">SOC 掉线</option>
+            <option value="log_stall">日志停更</option>
+          </select>
+        </label>
+        <label class="field wide"><span>正则 / CAN ID</span><input id="ruPattern"></label>
+        <label class="field"><span>窗口</span><input type="number" min="0" step="500" id="ruWindow"><em>ms</em></label>
+        <label class="field"><span>次数</span><input type="number" min="1" id="ruHits"></label>
+        <label class="field"><span>超时</span><input type="number" min="0" step="500" id="ruAfter"><em>ms</em></label>
+        <label class="field"><span>总线</span><input id="ruBus" placeholder="ican"></label>
+        <label class="field"><span>冷却</span><input type="number" min="0" step="1000" id="ruCooldown"><em>ms</em></label>
+      </div>
+      <div class="form-row">
+        <label class="check"><input type="checkbox" id="ruFreeze"> 命中时保全现场</label>
+        <label class="check"><input type="checkbox" id="ruStop"> 命中时停止剧本</label>
+        <label class="check"><input type="checkbox" id="ruEnabled"> 启用</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="ruleModal">取消</button>
+      <button class="btn primary" id="btnRuleApply">应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 设置 ============================ -->
+<div class="overlay hidden" id="settingsModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>设置</h2>
+      <button class="btn ghost" data-close="settingsModal">✕</button>
+    </div>
+    <div class="modal-body settings">
+      <h4>继电器（上下电）</h4>
+      <div class="form-row">
+        <label class="field"><span>串口</span><input id="setRelayPort" placeholder="COM5"></label>
+        <label class="field"><span>波特率</span><input type="number" id="setRelayBaud"></label>
+        <label class="check"><input type="checkbox" id="setRelayDry"> 干跑（不驱动继电器）</label>
+      </div>
+
+      <h4>DUT 串口（抓取日志 / 判定）</h4>
+      <div class="form-row">
+        <label class="field"><span>串口</span><input id="setSerialPort" placeholder="COM4"></label>
+        <label class="field"><span>波特率</span><input type="number" id="setSerialBaud"></label>
+        <label class="field"><span>抽样上限</span><input type="number" id="setSerialRate"><em>行/秒</em></label>
+        <label class="field" title="上电/上 IG 后 DUT 启动期间，不把「没 adb / 没日志」判成事故">
+          <span>启动窗口</span><input type="number" id="setBootGrace" step="1000"><em>ms</em>
+        </label>
+      </div>
+
+      <h4>CAN 引擎</h4>
+      <div class="form-row">
+        <label class="field"><span>解释器</span><input id="setCanPython" placeholder="py -3.8-32"></label>
+        <label class="field wide"><span>SDK 目录</span><input id="setCanSdk"></label>
+        <label class="field"><span>设备类型</span><input type="number" id="setCanType"></label>
+      </div>
+      <div class="form-row" id="setCanChannels"></div>
+
+      <h4>现场保全</h4>
+      <div class="form-row">
+        <label class="field"><span>串口尾部</span><input type="number" id="setIncKb"><em>KB</em></label>
+        <label class="field"><span>事件尾部</span><input type="number" id="setIncEvents"><em>条</em></label>
+        <label class="check"><input type="checkbox" id="setIncShot"> 抓 DUT 截图</label>
+        <label class="check"><input type="checkbox" id="setIncKeep"> 保持现场（不下电）</label>
+      </div>
+
+      <h4>保留策略</h4>
+      <div class="form-row">
+        <label class="field"><span>最多保留</span><input type="number" id="setRetRuns"><em>次运行</em></label>
+        <label class="field"><span>最长保留</span><input type="number" id="setRetDays"><em>天</em></label>
+      </div>
+      <p class="hint">保存后写回 <span class="mono">config.json</span>；串口/CAN 的改动在下次重连或重启后生效。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="settingsModal">取消</button>
+      <button class="btn primary" id="btnSettingsApply">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<!-- ============================ 抓屏预览 ============================ -->
+<div class="overlay hidden" id="screenModal">
+  <div class="modal narrow">
+    <div class="modal-head">
+      <h2 id="screenTitle">仪表画面</h2>
+      <button class="btn ghost" data-close="screenModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="screenWrap" style="position:relative">
+        <img id="screenImg" alt="仪表画面" style="width:100%; border-radius:8px; border:1px solid var(--line); background:#000; display:block">
+        <div id="screenSel" class="hidden" style="position:absolute; border:2px dashed #4ad3ff; background:rgba(74,211,255,.16); pointer-events:none; border-radius:3px"></div>
+      </div>
+      <div class="hint" id="screenStats" style="margin-top:8px"></div>
+      <div class="stim-row" style="padding-top:8px">
+        <select id="regionMetric" title="选择要圈选的读数指标">
+          <option value="voltage">蓄电池电压</option>
+          <option value="odo">总里程</option>
+          <option value="trip">小计里程</option>
+          <option value="soc">SOC 百分比</option>
+        </select>
+        <button class="btn tiny" id="btnRegionPick" title="在画面上拖一个框，作为读取数字的区域">圈选读数区域</button>
+        <button class="btn tiny ghost" id="btnRegionReset">恢复默认区域</button>
+        <span class="hint" id="regionHint"></span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="screenModal">关闭</button>
+      <button class="btn primary" id="btnScreenRefresh">重新抓屏</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/core.js"></script>
+<script src="/static/js/channels.js"></script>
+<script src="/static/js/scenario.js"></script>
+<script src="/static/js/logs.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

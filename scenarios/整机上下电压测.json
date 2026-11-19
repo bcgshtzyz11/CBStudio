@@ -1,0 +1,153 @@
+{
+ "name": "整机上下电压测",
+ "description": "主电→ACC→IG 依次上电，等待 SOC 起来并检查无 ERROR，再按相反顺序下电；循环压测。",
+ "loops": 10000,
+ "loop_interval_ms": 5000,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "none",
+  "buses": [],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1
+ },
+ "states": [
+  {
+   "id": "s0bb0ec",
+   "name": "主电上",
+   "channels": {
+    "power": "on"
+   },
+   "hold_ms": 800,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    }
+   ],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "se2c714",
+   "name": "ACC 上",
+   "channels": {
+    "acc": "on"
+   },
+   "hold_ms": 800,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s0c7a02",
+   "name": "IG 上（SOC 启动）",
+   "channels": {
+    "ig": "on"
+   },
+   "hold_ms": 1000,
+   "wait": {
+    "type": "adb_online",
+    "timeout_ms": 30000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    },
+    {
+     "type": "adb_online",
+     "expect": true
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": "SOC 冷启动约 15~20s：等 adb 枚举到再判，超时才算没起来"
+  },
+  {
+   "id": "s0d1a09",
+   "name": "上电稳定观察",
+   "channels": {},
+   "hold_ms": 3000,
+   "wait": {
+    "type": "log_growing",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    },
+    {
+     "type": "voltage",
+     "min": 23,
+     "max": 32
+    },
+    {
+     "type": "screen",
+     "min_ratio": 0.15
+    },
+    {
+     "type": "screen_region",
+     "tol": 0.15
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": "SOC 在线且 mcu.log 持续增长 = MCU 在刷日志；查电压与仪表画面（画面基线需先「学基线」），失败即冻结现场"
+  },
+  {
+   "id": "s8dc124",
+   "name": "IG 断（SOC 走掉电流程）",
+   "channels": {
+    "ig": "off"
+   },
+   "hold_ms": 2000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "撤 IG 后 SOC 约 10s 才真正断电，属正常流程"
+  },
+  {
+   "id": "sa2944b",
+   "name": "ACC 断",
+   "channels": {
+    "acc": "off"
+   },
+   "hold_ms": 30000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  }
+ ]
+}

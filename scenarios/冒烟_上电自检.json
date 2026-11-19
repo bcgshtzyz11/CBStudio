@@ -1,0 +1,74 @@
+{
+ "name": "冒烟_上电自检",
+ "description": "最小流程：整机上电 → 等 SOC 在线 → 检查 3s 无 ERROR → 结束（不断电，留着现场）。",
+ "loops": 1,
+ "loop_interval_ms": 1000,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "none",
+  "buses": [],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1.0
+ },
+ "states": [
+  {
+   "id": "sb1a81a",
+   "name": "整机上电",
+   "channels": {
+    "power": "on",
+    "acc": "on",
+    "ig": "on"
+   },
+   "hold_ms": 1000,
+   "wait": {
+    "type": "adb_online",
+    "timeout_ms": 10000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "se658fb",
+   "name": "自检观察",
+   "channels": {},
+   "hold_ms": 3000,
+   "wait": {
+    "type": "log_growing",
+    "timeout_ms": 4000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s4237d1",
+   "name": "保留现场（不下电）",
+   "channels": {},
+   "hold_ms": 500,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "结束时保持上电，方便回看屏幕与日志"
+  }
+ ]
+}

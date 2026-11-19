@@ -1,0 +1,58 @@
+{
+ "name": "新剧本",
+ "description": "",
+ "loops": 1000,
+ "loop_interval_ms": 1000,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "none",
+  "buses": [],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1
+ },
+ "states": [
+  {
+   "id": "s8eddea",
+   "name": "整机上电",
+   "channels": {
+    "power": "on",
+    "acc": "on",
+    "ig": "on"
+   },
+   "hold_ms": 7000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s86cfca",
+   "name": "整机下电",
+   "channels": {
+    "power": "off",
+    "acc": "off",
+    "ig": "off"
+   },
+   "hold_ms": 2000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  }
+ ]
+}

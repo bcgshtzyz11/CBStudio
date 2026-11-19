@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "simulate": false,
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8777,
+    "open_browser": true
+  },
+  "channels": [
+    { "id": "power", "label": "主电 POWER", "kind": "relay", "relay": 1, "default_on": false },
+    { "id": "acc", "label": "ACC", "kind": "relay", "relay": 2, "default_on": false },
+    { "id": "ig", "label": "IG", "kind": "relay", "relay": 3, "default_on": false },
+    { "id": "relay4", "label": "继电器 4", "kind": "relay", "relay": 4, "default_on": false },
+    { "id": "ican", "label": "ICAN 发送", "kind": "can", "bus": "ican", "default_on": false },
+    { "id": "pcan", "label": "PCAN 发送", "kind": "can", "bus": "pcan", "default_on": false }
+  ],
+  "relay": {
+    "port": "COM5",
+    "baud": 9600,
+    "dry_run": false
+  },
+  "can": {
+    "enabled": true,
+    "python": "",
+    "sdk_dir": "",
+    "device_type": 41,
+    "stats_ms": 500,
+    "manifest": "can_matrix_manifest.json",
+    "channels": {
+      "ican": { "ch": 0, "baud": 500000 },
+      "pcan": { "ch": 1, "baud": 500000 }
+    }
+  },
+  "probes": {
+    "boot_grace_ms": 25000,
+    "serial": { "enabled": true, "port": "COM4", "baud": 460800, "log_rate": 40 },
+    "adb": {
+      "enabled": true,
+      "interval_ms": 1000,
+      "exe": "",
+      "log_path": "/userdata/log/mcu/mcu/mcu.log"
+    }
+  },
+  "incident": {
+    "freeze_ms": 800,
+    "serial_tail_kb": 256,
+    "events_tail": 300,
+    "adb_log_lines": 300,
+    "screenshot": true,
+    "keep_power": true,
+    "open_folder": false
+  },
+  "retention": { "max_runs": 60, "max_days": 30 },
+  "ui": { "log_cap": 2000, "theme": "dark" }
+}

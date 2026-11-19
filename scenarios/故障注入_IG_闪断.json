@@ -1,0 +1,98 @@
+{
+ "name": "故障注入_IG 闪断",
+ "description": "整机上电稳定后反复闪断 IG（200ms 断 / 800ms 通），验证掉电保持与重新起机。",
+ "loops": 20,
+ "loop_interval_ms": 800,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "none",
+  "buses": [],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1.0
+ },
+ "states": [
+  {
+   "id": "s0c7912",
+   "name": "整机上电",
+   "channels": {
+    "power": "on",
+    "acc": "on",
+    "ig": "on"
+   },
+   "hold_ms": 1200,
+   "wait": {
+    "type": "adb_online",
+    "timeout_ms": 10000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s332cc9",
+   "name": "稳定观察",
+   "channels": {},
+   "hold_ms": 2000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    }
+   ],
+   "on_fail": "continue",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s8a75b5",
+   "name": "IG 闪断",
+   "channels": {
+    "ig": "off"
+   },
+   "hold_ms": 200,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "工程要求：掉电保持时间内的状态必须保留"
+  },
+  {
+   "id": "s1f4d0d",
+   "name": "IG 恢复",
+   "channels": {
+    "ig": "on"
+   },
+   "hold_ms": 800,
+   "wait": {
+    "type": "serial_match",
+    "timeout_ms": 3000,
+    "value": "SpiRx",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "no_error"
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": ""
+  }
+ ]
+}

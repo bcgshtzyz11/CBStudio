@@ -1,0 +1,295 @@
+{
+ "name": "电源状态机_待机与唤醒",
+ "description": "按 PowerMng 的状态机走一遍：仅主电（OFF）→ 任意帧（STANDBY）→ 停帧（回 OFF）→ 唤醒帧（LISTEN，SOC 上电）→ 停唤醒帧（5s 回 STANDBY）→ ACC（PRE_ON）→ IG（ON）。",
+ "loops": 1,
+ "loop_interval_ms": 3000,
+ "stop_on_incident": true,
+ "keep_power_on_incident": true,
+ "auto_mute_power_off": true,
+ "can": {
+  "mode": "none",
+  "buses": [],
+  "rand_mode": "per-frame",
+  "rand_interval_ms": 1000,
+  "cycle_scale": 1.0
+ },
+ "states": [
+  {
+   "id": "s6aafa9",
+   "name": "整机断电（基准）",
+   "channels": {
+    "power": "off",
+    "acc": "off",
+    "ig": "off"
+   },
+   "hold_ms": 2000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "起点全断，MCU 也掉电"
+  },
+  {
+   "id": "sca7b07",
+   "name": "仅主电（MCU 起，SOC 不上电）",
+   "channels": {
+    "power": "on"
+   },
+   "hold_ms": 3000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 12000,
+    "value": 0,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 0
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": "只有主电时 PowerMng 停在 OFF(0)，SOC 无电"
+  },
+  {
+   "id": "s62d7a6",
+   "name": "任意帧 → 待机",
+   "channels": {},
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 8000,
+    "value": 1,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 1
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [
+    {
+     "type": "can_stim",
+     "mode": "any",
+     "period_ms": 200
+    }
+   ],
+   "note": "任意一帧即可把 OFF 唤醒到 STANDBY(1)"
+  },
+  {
+   "id": "scd6451",
+   "name": "待机保持（普通帧续命 6s）",
+   "channels": {},
+   "hold_ms": 6000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 1
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": "持续发普通帧 ⇒ 网络不静默，不会落回关机"
+  },
+  {
+   "id": "sa39325",
+   "name": "停帧 → 回关机",
+   "channels": {},
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 35000,
+    "value": 0,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 0
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [
+    {
+     "type": "can_stim",
+     "mode": "silence"
+    }
+   ],
+   "note": "网络静默 10s 发关机状态、再 15s 断电（实测约 25s）"
+  },
+  {
+   "id": "sb6e450",
+   "name": "唤醒帧 → 监听（SOC 上电）",
+   "channels": {},
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 12000,
+    "value": 2,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 2
+    },
+    {
+     "type": "pwr_seen",
+     "expect": 2
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [
+    {
+     "type": "can_stim",
+     "mode": "wake",
+     "period_ms": 50
+    }
+   ],
+   "note": "转向/双闪/BMS1 充电/OTA 四类唤醒源，进 LISTEN(2) 且 SOC 上电"
+  },
+  {
+   "id": "sf8a626",
+   "name": "监听续期（唤醒帧不停 6s）",
+   "channels": {},
+   "hold_ms": 6000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 2
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": "每 50ms 一帧唤醒源 ⇒ 监听窗口持续续期"
+  },
+  {
+   "id": "s92504b",
+   "name": "停唤醒帧 → 5s 落待机",
+   "channels": {},
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 12000,
+    "value": 1,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 1
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [
+    {
+     "type": "can_stim",
+     "mode": "silence"
+    }
+   ],
+   "note": "5s 无唤醒帧 → STANDBY(1)，SOC 仍带电"
+  },
+  {
+   "id": "s626869",
+   "name": "ACC 上 → 预开机",
+   "channels": {
+    "acc": "on"
+   },
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 10000,
+    "value": 3,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 3
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "sb56035",
+   "name": "IG 上 → 开机",
+   "channels": {
+    "ig": "on"
+   },
+   "hold_ms": 1000,
+   "wait": {
+    "type": "pwr_state",
+    "timeout_ms": 10000,
+    "value": 4,
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "pwr_state",
+     "expect": 4
+    },
+    {
+     "type": "adb_online",
+     "expect": true
+    },
+    {
+     "type": "voltage",
+     "min": 18,
+     "max": 32
+    },
+    {
+     "type": "screen",
+     "min_ratio": 0.15
+    }
+   ],
+   "on_fail": "freeze",
+   "actions": [],
+   "note": ""
+  },
+  {
+   "id": "s58b9e8",
+   "name": "收尾：整机断电",
+   "channels": {
+    "power": "off"
+   },
+   "hold_ms": 2000,
+   "wait": {
+    "type": "none",
+    "timeout_ms": 5000,
+    "value": "",
+    "bus": ""
+   },
+   "checks": [
+    {
+     "type": "adb_online",
+     "expect": false
+    }
+   ],
+   "on_fail": "continue",
+   "actions": [],
+   "note": "结束时全断，方便下一轮从一致状态开始"
+  }
+ ]
+}
