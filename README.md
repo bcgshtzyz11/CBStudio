@@ -219,13 +219,13 @@ ACC（预开机）→ IG（开机）→ 收尾断电。真机实测 11 张卡全
 
 ## 4. 硬件对应关系
 
-| 资源 | 本机默认 | 说明 |
+| 资源 | 默认 | 说明 |
 |---|---|---|
-| 继电器 LCUS-4 | `COM5`（CH340） | CH1=主电、CH2=ACC、CH3=IG、CH4=备用；9600 8N1，无回读 |
-| DUT 调试串口 | `COM4` @460800（Prolific） | MCU 日志，工作台按行解析 |
-| CAN | ZLG USBCANFD-200U，type 41 | CH0=ICAN、CH1=PCAN，500 kbps |
-| SOC | adb | `F:\BaiduNetdiskDownload\platform-tools-latest-windows\platform-tools\adb.exe` |
-| 报文清单 | `_tools/can_random_tx/can_matrix_manifest.json` | 由 `gen_manifest.py` 从矩阵 Excel 生成 |
+| 继电器 LCUS-4 | 自动识别（典型 `COM5` CH340） | CH1=主电、CH2=ACC、CH3=IG、CH4=备用；9600 8N1，无回读 |
+| DUT 调试串口 | 自动识别（典型 `COM4` @460800 Prolific） | MCU 日志，工作台按行解析 |
+| CAN | ZLG USBCANFD-200U，type 41（型号自动识别） | CH0=ICAN、CH1=PCAN，500 kbps，可在 CAN 配置弹窗里按通道改 |
+| SOC | adb 自动探测（PATH / 随包 `platform-tools` / Android SDK） | 抓日志、抓屏 |
+| 报文清单 | 随包 `can_matrix_manifest.json`（按工作台目录解析） | 由 `gen_manifest.py` 从矩阵 Excel 生成 |
 
 这些都可在界面「设置」里改，保存到 `config.json`。
 
