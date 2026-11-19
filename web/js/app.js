@@ -322,8 +322,9 @@ let regionPicking = false;
 let regionStart = null;
 
 function regionBoxIn(wrap, region) {
-  const w = wrap.clientWidth;
-  const h = wrap.clientHeight;
+  const img = document.querySelector('#screenImg');
+  const w = (img && img.clientWidth) || wrap.clientWidth;
+  const h = (img && img.clientHeight) || wrap.clientHeight;
   return {
     left: Math.round(region.x0 * w),
     top: Math.round(region.y0 * h),
@@ -357,7 +358,9 @@ function paintRegion(region) {
   box.classList.remove('hidden');
   const hint = $('#regionHint');
   if (hint) {
-    hint.textContent = '读数区域（' + currentRegionMetric() + '）：x ' + (region.x0 * 100).toFixed(1) + '~' + (region.x1 * 100).toFixed(1)
+    const label = (typeof METRIC_LABEL !== 'undefined' && METRIC_LABEL[currentRegionMetric()])
+      || currentRegionMetric();
+    hint.textContent = '读数区域（' + label + '）：x ' + (region.x0 * 100).toFixed(1) + '~' + (region.x1 * 100).toFixed(1)
       + '% , y ' + (region.y0 * 100).toFixed(1) + '~' + (region.y1 * 100).toFixed(1) + '%';
   }
 }
@@ -376,7 +379,8 @@ function bindRegionPicker() {
   });
 
   const toFraction = (ev) => {
-    const rect = wrap.getBoundingClientRect();
+    const target = document.querySelector('#screenImg') || wrap;
+    const rect = target.getBoundingClientRect();
     return {
       x: Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width)),
       y: Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height)),
@@ -387,8 +391,8 @@ function bindRegionPicker() {
     if (!regionPicking) return;
     ev.preventDefault();
     regionStart = toFraction(ev);
-    box.style.left = (regionStart.x * wrap.clientWidth) + 'px';
-    box.style.top = (regionStart.y * wrap.clientHeight) + 'px';
+    box.style.left = (regionStart.x * img.clientWidth) + 'px';
+    box.style.top = (regionStart.y * img.clientHeight) + 'px';
     box.style.width = '0px';
     box.style.height = '0px';
     box.classList.remove('hidden');
@@ -399,10 +403,10 @@ function bindRegionPicker() {
     const cur = toFraction(ev);
     const x0 = Math.min(regionStart.x, cur.x);
     const y0 = Math.min(regionStart.y, cur.y);
-    box.style.left = (x0 * wrap.clientWidth) + 'px';
-    box.style.top = (y0 * wrap.clientHeight) + 'px';
-    box.style.width = (Math.abs(cur.x - regionStart.x) * wrap.clientWidth) + 'px';
-    box.style.height = (Math.abs(cur.y - regionStart.y) * wrap.clientHeight) + 'px';
+    box.style.left = (x0 * img.clientWidth) + 'px';
+    box.style.top = (y0 * img.clientHeight) + 'px';
+    box.style.width = (Math.abs(cur.x - regionStart.x) * img.clientWidth) + 'px';
+    box.style.height = (Math.abs(cur.y - regionStart.y) * img.clientHeight) + 'px';
   });
 
   img.addEventListener('mouseup', async ev => {
@@ -424,6 +428,17 @@ function bindRegionPicker() {
       pick.classList.remove('primary');
       toast('读数区域已保存；旧基线已清空，请重新「学基线」', 'ok');
     }
+  });
+
+  $('#btnScreenZoom')?.addEventListener('click', () => {
+    const wrap = document.querySelector('#screenWrap');
+    const img = $('#screenImg');
+    if (!wrap || !img) return;
+    const zoomed = wrap.classList.toggle('zoom');
+    img.style.width = zoomed ? 'auto' : '100%';
+    const btn = $('#btnScreenZoom');
+    if (btn) btn.textContent = zoomed ? '适应窗口' : '放大 1:1';
+    paintRegion(currentRegion());
   });
 
   $('#btnRegionReset')?.addEventListener('click', async () => {

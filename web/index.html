@@ -461,26 +461,29 @@
 
 <!-- ============================ 抓屏预览 ============================ -->
 <div class="overlay hidden" id="screenModal">
-  <div class="modal narrow">
+  <div class="modal" style="width:min(1280px, 96vw)">
     <div class="modal-head">
       <h2 id="screenTitle">仪表画面</h2>
       <button class="btn ghost" data-close="screenModal">✕</button>
     </div>
     <div class="modal-body">
-      <div id="screenWrap" style="position:relative">
+      <div id="screenWrap" class="screen-wrap">
         <img id="screenImg" alt="仪表画面" style="width:100%; border-radius:8px; border:1px solid var(--line); background:#000; display:block">
         <div id="screenSel" class="hidden" style="position:absolute; border:2px dashed #4ad3ff; background:rgba(74,211,255,.16); pointer-events:none; border-radius:3px"></div>
       </div>
       <div class="hint" id="screenStats" style="margin-top:8px"></div>
       <div class="stim-row" style="padding-top:8px">
-        <select id="regionMetric" title="选择要圈选的读数指标">
+        <select id="regionMetric" class="mini-select" title="选择要圈选的读数指标">
           <option value="voltage">蓄电池电压</option>
           <option value="odo">总里程</option>
           <option value="trip">小计里程</option>
           <option value="soc">SOC 百分比</option>
         </select>
-        <button class="btn tiny" id="btnRegionPick" title="在画面上拖一个框，作为读取数字的区域">圈选读数区域</button>
-        <button class="btn tiny ghost" id="btnRegionReset">恢复默认区域</button>
+        <span style="display:inline-flex; gap:6px; flex-wrap:wrap">
+          <button class="btn tiny" id="btnRegionPick" title="在画面上拖一个框，作为读取数字的区域">圈选读数区域</button>
+          <button class="btn tiny ghost" id="btnRegionReset">恢复默认区域</button>
+          <button class="btn tiny ghost" id="btnScreenZoom" title="在适应窗口与原始尺寸之间切换">放大 1:1</button>
+        </span>
         <span class="hint" id="regionHint"></span>
       </div>
     </div>

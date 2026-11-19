@@ -676,3 +676,10 @@ button { cursor: pointer; }
   .col-left .panel { min-width: 260px; }
   .topbar { flex-wrap: wrap; height: auto; flex-basis: auto; padding: 8px 12px; }
 }
+
+/* 抓屏预览：大图 + 可滚动 + 深色下拉 */
+.screen-wrap { position: relative; overflow: auto; max-height: 62vh; border-radius: 8px; }
+.screen-wrap img { display: block; }
+.screen-wrap.zoom img { width: auto; min-width: 100%; }
+select, option { color-scheme: dark; }
+select option { background: #1b2430; color: #e6edf5; }
