@@ -106,14 +106,17 @@ function renderProbes(snap) {
 
   const canRow = $('#probeCan');
   const canRunning = can.state === 'running';
-  canRow.className = 'probe-row ' + (canRunning ? 'ok' : (can.state === 'error' ? 'err' : 'warn'));
+  const canBusy = can.state === 'starting' || can.state === 'stopping';
+  canRow.className = 'probe-row '
+    + (canRunning ? 'ok' : (canBusy ? 'warn' : (can.state === 'error' ? 'err' : 'off')));
   $('#probeCanDetail').textContent = canRunning
     ? (can.device && can.device.type ? can.device.type : 'ZLG') + ' · Python ' + (can.python || '?')
-    : (can.message || '未连接');
+    : (canBusy ? (can.state === 'starting' ? '连接中…' : '断开中…')
+      : (can.message && can.state === 'error' ? can.message : '已关闭（设备已释放）'));
   const btn = $('#btnCanConnect');
   if (btn) {
-    btn.textContent = canRunning ? '断开' : (can.state === 'starting' ? '连接中' : '连接');
-    btn.disabled = can.state === 'starting';
+    btn.textContent = canRunning ? '关闭' : (canBusy ? '处理中' : '开启');
+    btn.disabled = canBusy;
   }
 
   const pwr = (snap.probe && snap.probe.pwr) || {};

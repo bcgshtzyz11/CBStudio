@@ -239,8 +239,12 @@ function bindTopButtons() {
 
   $('#btnCanConnect').addEventListener('click', async () => {
     const can = (S.snapshot && S.snapshot.can) || {};
-    const res = await API.action(can.state === 'running' ? 'can.disconnect' : 'can.connect', {});
-    if (res) toast(res.message || (res.ok ? '已连接' : '连接失败'), res.ok ? 'ok' : 'error');
+    const running = can.state === 'running';
+    const res = await API.action(running ? 'can.disconnect' : 'can.connect', {});
+    if (res) {
+      toast(res.message || (res.ok ? (running ? 'CAN 已关闭' : 'CAN 已开启') : '操作失败'),
+            res.ok ? 'ok' : 'error');
+    }
   });
 
   $$('.preset-row .btn').forEach(btn => {
