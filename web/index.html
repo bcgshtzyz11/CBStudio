@@ -43,6 +43,7 @@
     <button class="btn warn" id="btnFreeze" title="立刻抓现场并保持不动电">
       <span class="ico">⚡</span><span>保留现场</span>
     </button>
+    <button class="btn" id="btnCanCfg" title="CAN 设备 / 波特率 / DBC">CAN</button>
     <button class="btn ghost" id="btnSettings" title="设置（硬件 / 保全 / 保留策略）">⚙</button>
   </div>
 </header>
@@ -337,6 +338,68 @@
 </div>
 
 <!-- ============================ 设置 ============================ -->
+<div class="overlay hidden" id="canModal">
+  <div class="modal" style="width:min(1220px, 96vw)">
+    <div class="modal-head">
+      <h2>CAN 设备与通道</h2>
+      <button class="btn ghost" data-close="canModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="stim-row" style="align-items:center; gap:12px; flex-wrap:wrap">
+        <label class="field"><span>设备类型</span>
+          <select id="canDeviceType" class="mini-select">
+            <option value="0">自动识别</option>
+            <option value="41">USBCANFD-200U</option>
+            <option value="42">USBCANFD-400U</option>
+            <option value="43">USBCANFD-800U</option>
+            <option value="4">USBCAN-II</option>
+            <option value="3">USBCAN-I</option>
+          </select>
+        </label>
+        <label class="field"><span>索引</span>
+          <input id="canDeviceIndex" class="mini-input" type="number" value="0" min="0" style="width:60px">
+        </label>
+        <div style="display:inline-flex; gap:6px">
+          <button class="btn tiny" id="btnCanOpen">打开设备</button>
+          <button class="btn tiny ghost" id="btnCanClose">关闭设备</button>
+        </div>
+        <span class="hint" id="canDevInfo"></span>
+      </div>
+
+      <table class="tbl" id="canChTable" style="margin-top:12px; table-layout:auto">
+        <thead>
+          <tr>
+            <th>通道</th><th>启用</th><th>协议</th><th>FD 标准</th><th>加速</th>
+            <th>仲裁波特率</th><th>采样点%</th><th>数据波特率</th><th>采样点%</th>
+            <th>模式</th><th>终端电阻</th><th>启停</th>
+          </tr>
+        </thead>
+        <tbody id="canChBody"></tbody>
+      </table>
+      <div class="hint" style="margin-top:6px">
+        波特率单位 bps（如 500000）；采样点只在 CAN FD 下生效（80 表示 80%）。改完点「应用并重连」。
+      </div>
+
+      <h3 style="margin:16px 0 6px">DBC 导入</h3>
+      <div class="stim-row" style="align-items:center; gap:10px; flex-wrap:wrap">
+        <input type="file" id="dbcFile" accept=".dbc,.DBC,text/plain" class="mini-input">
+        <button class="btn tiny ghost" id="btnDbcClear">清除</button>
+        <span class="hint" id="dbcInfo">未导入</span>
+      </div>
+      <div class="scroll" style="max-height:200px; margin-top:8px">
+        <table class="tbl" id="dbcTable">
+          <thead><tr><th>总线</th><th>报文</th><th>信号</th><th>值</th><th>单位</th></tr></thead>
+          <tbody id="dbcBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="canModal">关闭</button>
+      <button class="btn primary" id="btnCanApply">应用并重连</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="settingsModal">
   <div class="modal">
     <div class="modal-head">
@@ -429,6 +492,7 @@
 <script src="/static/js/channels.js"></script>
 <script src="/static/js/scenario.js"></script>
 <script src="/static/js/logs.js"></script>
+<script src="/static/js/can.js"></script>
 <script src="/static/js/app.js"></script>
 </body>
 </html>

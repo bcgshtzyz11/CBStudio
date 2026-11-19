@@ -95,14 +95,35 @@ class CanSupervisor(object):
         """配置里的通道表 -> 引擎期望的 ``[{bus,ch,baud,mode}]``。"""
         specs = []
         for bus, item in (self._config.get("channels") or {}).items():
-            specs.append({
+            if item.get("enabled") is False:
+                continue
+            spec = {
                 "bus": str(bus),
                 "ch": int(item.get("ch", 0)),
                 "baud": int(item.get("baud", 500000)),
+                "data_baud": int(item.get("data_baud", 2000000)),
                 "mode": int(item.get("mode", 0)),
                 "terminator": bool(item.get("terminator", True)),
-            })
+            }
+            for key in ("proto", "fd_standard", "accel", "arb_sp", "data_sp"):
+                if item.get(key) is not None:
+                    spec[key] = item.get(key)
+            specs.append(spec)
         return specs
+
+    def channel_start(self, bus):
+        """启动某一路通道。"""
+        return self.send("ch_start", {"bus": str(bus)}, timeout=8.0)
+
+    def channel_stop(self, bus):
+        """停止某一路通道。"""
+        return self.send("ch_stop", {"bus": str(bus)}, timeout=8.0)
+
+    def set_rx_watch(self, ids=None, watch_all=False):
+        """设置要留存原始载荷的 CAN ID（DBC 解码用）。"""
+        if self.state != "running":
+            return {"ok": False, "message": "CAN 未连接"}
+        return self.send("rx_watch", {"ids": list(ids or []), "all": bool(watch_all)}, timeout=8.0)
 
     def bus_info(self, bus):
         """某路 CAN 的可用性（界面通道卡片用）。"""
@@ -479,6 +500,7 @@ class CanSupervisor(object):
         if name == "rx":
             with self._lock:
                 self.rx = event.get("buses") or {}
+                self.last_payload = event.get("last") or {}
                 self.last_rx_at = paths_now()
             if self.on_rx is not None:
                 try:
@@ -534,6 +556,10 @@ class CanSupervisor(object):
                     "buses": buses,
                     "stimuli": dict(self.stimuli),
                     "rx_log": self.rx_log_path,
+                    "channel_cfg": dict(self._config.get("channels") or {}),
+                    "device_type": self._device_type_value(),
+                    "last_payload": {bus: {str(k): v for k, v in (items or {}).items()}
+                                      for bus, items in (getattr(self, "last_payload", None) or {}).items()},
                     "python": self.hello.get("py", "")}
 
     def rx_ids(self, bus):

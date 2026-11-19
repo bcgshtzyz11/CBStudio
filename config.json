@@ -1,161 +1,179 @@
 {
-  "version": 1,
-  "simulate": false,
-  "server": {
-    "host": "127.0.0.1",
-    "port": 8777,
-    "open_browser": true
+ "version": 1,
+ "simulate": false,
+ "server": {
+  "host": "127.0.0.1",
+  "port": 8777,
+  "open_browser": true
+ },
+ "channels": [
+  {
+   "id": "power",
+   "label": "主电 POWER",
+   "kind": "relay",
+   "relay": 1,
+   "default_on": false
   },
-  "channels": [
-    {
-      "id": "power",
-      "label": "主电 POWER",
-      "kind": "relay",
-      "relay": 1,
-      "default_on": false
-    },
-    {
-      "id": "acc",
-      "label": "ACC",
-      "kind": "relay",
-      "relay": 2,
-      "default_on": false
-    },
-    {
-      "id": "ig",
-      "label": "IG",
-      "kind": "relay",
-      "relay": 3,
-      "default_on": false
-    },
-    {
-      "id": "relay4",
-      "label": "继电器 4",
-      "kind": "relay",
-      "relay": 4,
-      "default_on": false
-    },
-    {
-      "id": "ican",
-      "label": "ICAN 发送",
-      "kind": "can",
-      "bus": "ican",
-      "default_on": false
-    },
-    {
-      "id": "pcan",
-      "label": "PCAN 发送",
-      "kind": "can",
-      "bus": "pcan",
-      "default_on": false
-    }
-  ],
-  "relay": {
-    "port": "",
-    "baud": 9600,
-    "dry_run": false
+  {
+   "id": "acc",
+   "label": "ACC",
+   "kind": "relay",
+   "relay": 2,
+   "default_on": false
   },
-  "can": {
-    "enabled": true,
-    "python": "",
-    "sdk_dir": "",
-    "device_type": 0,
-    "stats_ms": 500,
-    "manifest": "F:\\s32k328_Gerrit\\s32k328\\S32K328\\S32K328_M7_0_0\\_tools\\can_random_tx\\can_matrix_manifest.json",
-    "channels": {
-      "ican": {
-        "ch": 0,
-        "baud": 500000
-      },
-      "pcan": {
-        "ch": 1,
-        "baud": 500000
-      }
-    }
+  {
+   "id": "ig",
+   "label": "IG",
+   "kind": "relay",
+   "relay": 3,
+   "default_on": false
   },
-  "probes": {
-    "boot_grace_ms": 25000,
-    "serial": {
-      "enabled": true,
-      "port": "",
-      "baud": 460800,
-      "log_rate": 40
-    },
-    "adb": {
-      "enabled": true,
-      "interval_ms": 1000,
-      "exe": "",
-      "log_path": "/userdata/log/mcu/mcu/mcu.log"
-    },
-    "rules": [
-      {
-        "id": "r_err",
-        "name": "出现 ERROR 级日志",
-        "probe": "serial",
-        "type": "regex",
-        "pattern": "\\[ERROR\\]",
-        "window_ms": 0,
-        "min_hits": 1,
-        "severity": "error",
-        "freeze": true,
-        "stop": true,
-        "cooldown_ms": 5000,
-        "enabled": true
-      },
-      {
-        "id": "r_spirx_stall",
-        "name": "SpiRx 停更 (SPI 链路断)",
-        "probe": "spi",
-        "type": "silence",
-        "pattern": "\\[SpiRx\\]",
-        "after_ms": 3000,
-        "severity": "error",
-        "freeze": true,
-        "stop": false,
-        "cooldown_ms": 10000,
-        "enabled": true
-      },
-      {
-        "id": "r_adb_off",
-        "name": "SOC 掉线",
-        "probe": "adb",
-        "type": "adb_offline",
-        "after_ms": 3000,
-        "severity": "error",
-        "freeze": true,
-        "stop": false,
-        "cooldown_ms": 10000,
-        "enabled": false
-      },
-      {
-        "id": "r_log_stall",
-        "name": "SOC 在线但 mcu.log 不增长",
-        "probe": "adb",
-        "type": "log_stall",
-        "after_ms": 5000,
-        "severity": "warn",
-        "freeze": true,
-        "stop": false,
-        "cooldown_ms": 15000,
-        "enabled": false
-      }
-    ]
+  {
+   "id": "relay4",
+   "label": "继电器 4",
+   "kind": "relay",
+   "relay": 4,
+   "default_on": false
   },
-  "incident": {
-    "freeze_ms": 800,
-    "serial_tail_kb": 256,
-    "events_tail": 300,
-    "adb_log_lines": 300,
-    "screenshot": true,
-    "keep_power": true,
-    "open_folder": false
+  {
+   "id": "ican",
+   "label": "ICAN 发送",
+   "kind": "can",
+   "bus": "ican",
+   "default_on": false
   },
-  "retention": {
-    "max_runs": 60,
-    "max_days": 30
-  },
-  "ui": {
-    "log_cap": 2000,
-    "theme": "dark"
+  {
+   "id": "pcan",
+   "label": "PCAN 发送",
+   "kind": "can",
+   "bus": "pcan",
+   "default_on": false
   }
+ ],
+ "relay": {
+  "port": "",
+  "baud": 9600,
+  "dry_run": false
+ },
+ "can": {
+  "enabled": true,
+  "python": "",
+  "sdk_dir": "",
+  "device_type": 0,
+  "stats_ms": 500,
+  "manifest": "F:\\s32k328_Gerrit\\s32k328\\S32K328\\S32K328_M7_0_0\\_tools\\can_random_tx\\can_matrix_manifest.json",
+  "channels": {
+   "ican": {
+    "ch": 0,
+    "baud": 500000,
+    "enabled": true,
+    "proto": "canfd",
+    "fd_standard": 0,
+    "accel": true,
+    "arb_sp": 80,
+    "data_baud": 2000000,
+    "data_sp": 80,
+    "mode": 0,
+    "terminator": true
+   },
+   "pcan": {
+    "ch": 1,
+    "baud": 500000,
+    "enabled": true,
+    "proto": "canfd",
+    "fd_standard": 0,
+    "accel": true,
+    "arb_sp": 80,
+    "data_baud": 2000000,
+    "data_sp": 80,
+    "mode": 0,
+    "terminator": true
+   }
+  }
+ },
+ "probes": {
+  "boot_grace_ms": 25000,
+  "serial": {
+   "enabled": true,
+   "port": "",
+   "baud": 460800,
+   "log_rate": 40
+  },
+  "adb": {
+   "enabled": true,
+   "interval_ms": 1000,
+   "exe": "",
+   "log_path": "/userdata/log/mcu/mcu/mcu.log"
+  },
+  "rules": [
+   {
+    "id": "r_err",
+    "name": "出现 ERROR 级日志",
+    "probe": "serial",
+    "type": "regex",
+    "pattern": "\\[ERROR\\]",
+    "window_ms": 0,
+    "min_hits": 1,
+    "severity": "error",
+    "freeze": true,
+    "stop": true,
+    "cooldown_ms": 5000,
+    "enabled": true
+   },
+   {
+    "id": "r_spirx_stall",
+    "name": "SpiRx 停更 (SPI 链路断)",
+    "probe": "spi",
+    "type": "silence",
+    "pattern": "\\[SpiRx\\]",
+    "after_ms": 3000,
+    "severity": "error",
+    "freeze": true,
+    "stop": false,
+    "cooldown_ms": 10000,
+    "enabled": true
+   },
+   {
+    "id": "r_adb_off",
+    "name": "SOC 掉线",
+    "probe": "adb",
+    "type": "adb_offline",
+    "after_ms": 3000,
+    "severity": "error",
+    "freeze": true,
+    "stop": false,
+    "cooldown_ms": 10000,
+    "enabled": false
+   },
+   {
+    "id": "r_log_stall",
+    "name": "SOC 在线但 mcu.log 不增长",
+    "probe": "adb",
+    "type": "log_stall",
+    "after_ms": 5000,
+    "severity": "warn",
+    "freeze": true,
+    "stop": false,
+    "cooldown_ms": 15000,
+    "enabled": false
+   }
+  ]
+ },
+ "incident": {
+  "freeze_ms": 800,
+  "serial_tail_kb": 256,
+  "events_tail": 300,
+  "adb_log_lines": 300,
+  "screenshot": true,
+  "keep_power": true,
+  "open_folder": false
+ },
+ "retention": {
+  "max_runs": 60,
+  "max_days": 30
+ },
+ "ui": {
+  "log_cap": 2000,
+  "theme": "dark"
+ }
 }

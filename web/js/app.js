@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindSettings();
   bindModals();
   bindRegionPicker();
+  bindCanModal();
   bindKeys();
   bindTabs();
 
@@ -116,6 +117,7 @@ function applySnapshot(snap, initial) {
   renderProbes(snap);
   renderCanIds(snap);
   renderIncidents(snap);
+  if (typeof renderCanModal === "function") renderCanModal(snap);
   renderRules(snap);
   applyCounters(snap);
   updateTimelineDynamic();

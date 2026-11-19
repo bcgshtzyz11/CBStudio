@@ -31,31 +31,6 @@ CAN 部分由 32 位 Python 3.8 子进程跑（ZLG SDK 只有 32 位 DLL），�
 
 ---
 
-## 1.1 硬件自动识别
-
-配置里留空即「自动」，不用手工填口/型号/路径：
-
-| 项 | 配置 | 自动识别方式 |
-|---|---|---|
-| 继电器串口 | `relay.port = ""` | 枚举串口，优先 CH340（LCUS-4），跳过 DUT 调试口等占用口，逐个试开直到成功 |
-| ZLG 设备型号 | `can.device_type = 0` | 依次试 USBCANFD 家族与经典盒子，第一个能打开的即当前设备 |
-| ZLG SDK 目录 | `can.sdk_dir = ""` | 环境变量 `CBSTUDIO_SDK_DIR` → 默认目录 → 各盘符下含 `zlgcan.dll` 的 `zlgcan*` 目录 |
-| DUT 调试串口 | `probes.serial.port = ""` | 枚举串口，优先 Prolific/FTDI/CP210x（`067B`/`0403`/`10C4`），跳过继电器口，逐个按波特率试开 |
-| adb 路径 | `probes.adb.exe = ""` | PATH → `platform-tools` → 工具目录 → 常见安装位置 |
-
-继电器口与 DUT 口互相排除，不会抢同一个口。识别结果写进日志与状态栏，例如：
-
-```
-自动识别 DUT 串口: COM4（自动识别 USB-UART(067B:2303) Prolific USB-to-Serial Comm Port）
-串口已打开 COM4 @460800
-继电器串口已打开 COM5 @9600
-已连接 USBCANFD-200U
-```
-
-想固定住就在设置里把对应项填死，填了就按配置走、不再自动。
-
----
-
 ## 2. 界面速览
 
 ```

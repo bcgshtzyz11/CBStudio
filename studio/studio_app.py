@@ -22,6 +22,7 @@ import threading
 import time
 
 from . import config as config_mod
+from . import dbc as dbc_mod
 from . import paths, scenario as scenario_mod
 from .canctl import CanSupervisor
 from .channels import ChannelManager
@@ -90,6 +91,9 @@ class StudioApp(object):
         self.screens = __import__("collections").deque(maxlen=20)
         self._screen_seq = 0
         self.BASELINE_MAX = 8
+        self.dbc = None
+        self.dbc_name = ""
+        self._load_dbc()
         self.screen_baseline = self._load_screen_baseline()
         self.read_regions = self._load_read_regions()
 
@@ -161,6 +165,61 @@ class StudioApp(object):
             if shot["id"] == screen_id:
                 return shot
         return None
+
+    # -- DBC（报文信号解码） -----------------------------------------------
+    def dbc_path(self):
+        """当前 DBC 的缓存路径。"""
+        return os.path.join(paths.DATA_DIR, "dbc", "current.json")
+
+    def _load_dbc(self):
+        """启动时恢复上次导入的 DBC。"""
+        try:
+            self.dbc = dbc_mod.load(self.dbc_path())
+            self.dbc_name = "上次导入"
+        except (OSError, ValueError, KeyError):
+            self.dbc = None
+
+    def dbc_view(self, limit=200):
+        """把 DBC 信号与最近收到的载荷合成为界面表格行。"""
+        if not self.dbc:
+            return None
+        payloads = getattr(self.can, "last_payload", None) or {}
+        preview = self._can_ids_preview(limit=400) or {}
+        for bus, items in (preview or {}).items():
+            for item in items or []:
+                raw_id = item.get("id")
+                try:
+                    if isinstance(raw_id, str):
+                        key = str(int(raw_id, 16) if raw_id.lower().startswith("0x")
+                                  else int(raw_id))
+                    else:
+                        key = str(int(raw_id))
+                except (TypeError, ValueError):
+                    continue
+                payloads.setdefault(bus, {})[key] = {
+                    "d": item.get("data") or "", "t": 0, "ext": True}
+        rows = []
+        for message in self.dbc:
+            masked = message.can_id & 0x1FFFFFFF
+            for bus, items in payloads.items():
+                entry = items.get(str(masked)) or items.get(str(message.can_id))
+                if not entry:
+                    continue
+                data = dbc_mod.load_payload(entry.get("d"))
+                for signal in message.signals:
+                    value = dbc_mod.decode_signal(signal, data)
+                    if value is None:
+                        continue
+                    rows.append({"bus": bus, "id": message.can_id, "msg": message.name,
+                                 "signal": signal.name, "value": round(value, 3),
+                                 "unit": signal.unit, "t": entry.get("t", 0)})
+                    if len(rows) >= limit:
+                        return {"name": self.dbc_name, "messages": len(self.dbc),
+                                "signals": sum(len(m.signals) for m in self.dbc),
+                                "rows": rows, "truncated": True}
+        return {"name": self.dbc_name, "messages": len(self.dbc),
+                "signals": sum(len(m.signals) for m in self.dbc),
+                "rows": rows, "truncated": False}
 
     # -- 各指标的读数区域（可分别圈选） -----------------------------------
     METRIC_DEFS = {
@@ -589,6 +648,7 @@ class StudioApp(object):
             "probe": probe,
             "can": can_snap,
             "relay": self.relay.describe(),
+            "dbc": self.dbc_view(),
             "counters": self.bus.counters(),
             "incidents": incidents,
             "can_ids": self._can_ids_preview(limit=60 if compact else 400),
@@ -842,6 +902,72 @@ class StudioApp(object):
     def _op_can_connect(self, payload):
         ok, message = self.connect_can()
         return {"ok": ok, "message": message}
+
+    def _op_can_apply(self, payload):
+        """改 CAN 参数（设备/通道/波特率）并重连，使设置立即生效。"""
+        incoming = payload.get("can") or {}
+        merged = config_mod._merge(self.config.get("can") or {}, incoming)
+        self.config["can"] = merged
+        config_mod.save(self.config)
+        self.can.configure(merged)
+        was_running = self.state_is_can_running()
+        if was_running:
+            self.can.stop()
+            time.sleep(0.6)
+        ok, message = self.can.start()
+        self.bus.action("can", "CAN 参数已应用：%s" % (message or ""))
+        return {"ok": ok, "message": message}
+
+    def state_is_can_running(self):
+        """CAN 是否处于已连接/连接中。"""
+        return getattr(self.can, "state", "off") in ("running", "connecting")
+
+    def _op_can_channel_start(self, payload):
+        bus = payload.get("bus")
+        try:
+            return {"ok": True, "data": self.can.channel_start(bus)}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}
+
+    def _op_can_channel_stop(self, payload):
+        bus = payload.get("bus")
+        try:
+            return {"ok": True, "data": self.can.channel_stop(bus)}
+        except Exception as exc:
+            return {"ok": False, "message": str(exc)}
+
+    def _op_can_dbc_import(self, payload):
+        """导入 DBC 文本：解析报文/信号，并让引擎留存这些 ID 的原始载荷。"""
+        text = payload.get("text") or ""
+        name = (payload.get("name") or "import.dbc").strip()
+        model = dbc_mod.parse(text)
+        if not model:
+            return {"ok": False, "message": "没解析到报文，确认是 DBC 文本（BO_ / SG_ 行）"}
+        self.dbc = model
+        self.dbc_name = name
+        try:
+            dbc_mod.save(model, self.dbc_path())
+        except OSError as exc:
+            return {"ok": False, "message": "缓存失败: %s" % exc}
+        ids = sorted({message.can_id for message in model})
+        try:
+            self.can.set_rx_watch(ids)
+        except Exception:
+            pass
+        total = sum(len(message.signals) for message in model)
+        self.bus.action("can", "DBC 已导入：%s（%d 报文 / %d 信号）" % (name, len(model), total))
+        return {"ok": True, "messages": len(model), "signals": total, "ids": ids}
+
+    def _op_can_dbc_clear(self, payload):
+        """清掉已导入的 DBC。"""
+        self.dbc = None
+        self.dbc_name = ""
+        try:
+            if os.path.isfile(self.dbc_path()):
+                os.remove(self.dbc_path())
+        except OSError:
+            pass
+        return {"ok": True}
 
     def _op_can_disconnect(self, payload):
         self.can.stop()

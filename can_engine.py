@@ -284,6 +284,9 @@ class Engine(object):
         self.device = None
         self.sdk_dir = DEFAULT_SDK_DIR
         self.channels = {}               # bus -> {"ch", "baud", "handle", "tx": bool}
+        self._watch = set()              # 要留存原始载荷的 CAN ID（DBC 解码用）
+        self._watch_all = False
+        self._last_payload = {}          # bus -> {id: {"d": "..", "t": ms, "ext": bool}}
         self.stats_ms = STATS_MS_DEFAULT
         self.rx = None
         self._rx_thread = None
@@ -372,6 +375,10 @@ class Engine(object):
             baud = int(spec.get("baud") or 500000)
             data_baud = int(spec.get("data_baud") or 2000000)
             mode = int(spec.get("mode") or 0)          # 0 正常 / 1 只听
+            proto = str(spec.get("proto") or "").strip().lower()
+            usage = proto if proto in ("can", "canfd") else self._device_family
+            if usage == "canfd":
+                self._apply_canfd_options(chn, spec, baud, data_baud)
             self._set_baud(chn, baud, data_baud)
             try:
                 self.z.ZCAN_SetValue(self.device, "%d/initenal_resistance" % chn,
@@ -379,7 +386,7 @@ class Engine(object):
             except Exception:
                 pass
             config = ZCAN_CHANNEL_INIT_CONFIG()
-            if self._device_family == "canfd":
+            if usage == "canfd":
                 config.can_type = module.ZCAN_TYPE_CANFD
                 config.config.canfd.mode = mode
             else:
@@ -391,9 +398,10 @@ class Engine(object):
             if self.z.StartCAN(handle) != ZCAN_STATUS_OK:
                 raise RuntimeError("StartCAN CH%d 失败" % chn)
             self.channels[bus] = {"ch": chn, "baud": baud, "handle": handle,
-                                  "tx": False, "mode": mode}
+                                  "tx": False, "mode": mode, "proto": usage,
+                                  "running": True, "spec": dict(spec)}
             log("CH%d <- %s (%d bps, mode=%d, %s)"
-                % (chn, bus, baud, mode, self._device_family))
+                % (chn, bus, baud, mode, usage))
         self._stop.clear()
         self.rx = RxAggregator(self.stats_ms)
         self._rx_thread = threading.Thread(target=self._rx_loop, name="rx")
@@ -406,6 +414,56 @@ class Engine(object):
                 "device_type": self.detected_device_type,
                 "channels": [{"bus": bus, "ch": item["ch"], "baud": item["baud"],
                               "mode": item["mode"]} for bus, item in self.channels.items()]}
+
+    def _set_value(self, key, value):
+        """写一个设备/通道参数键，成功返回 True（失败静默，由调用方决定是否告警）。"""
+        try:
+            return self.z.ZCAN_SetValue(self.device, key, str(value).encode("utf-8")) == 1
+        except Exception:
+            return False
+
+    def _apply_canfd_options(self, chn, spec, baud, data_baud):
+        """CANFD 专属选项：标准、加速、采样点（采样点走 baud_rate_custom）。"""
+        standard = spec.get("fd_standard")
+        if standard is not None:
+            self._set_value("%d/canfd_standard" % chn, int(standard))
+        accel = spec.get("accel")
+        if accel is not None:
+            self._set_value("%d/canfd_exp" % chn, 1 if accel else 0)
+        arb_sp = spec.get("arb_sp")
+        data_sp = spec.get("data_sp")
+        if arb_sp or data_sp:
+            text = "%gKbps(%g%%),%gMbps(%g%%)" % (
+                baud / 1000.0, float(arb_sp or 80), data_baud / 1000000.0, float(data_sp or 80))
+            if not self._set_value("%d/baud_rate_custom" % chn, text):
+                log("CH%d 采样点配置不支持（%s），退回固定波特率" % (chn, text), "warn")
+
+    def channel_start(self, bus):
+        """启动一路通道。"""
+        item = self.channels.get(bus)
+        if not item:
+            raise RuntimeError("通道 %s 未初始化" % bus)
+        if item.get("running"):
+            return {"bus": bus, "running": True}
+        if not self.z.StartCAN(item["handle"]):
+            raise RuntimeError("StartCAN %s 失败" % bus)
+        item["running"] = True
+        return {"bus": bus, "running": True}
+
+    def channel_stop(self, bus):
+        """停止一路通道。"""
+        item = self.channels.get(bus)
+        if not item:
+            raise RuntimeError("通道 %s 未初始化" % bus)
+        self.z.ResetCAN(item["handle"])
+        item["running"] = False
+        return {"bus": bus, "running": False}
+
+    def set_rx_watch(self, ids=None, watch_all=False):
+        """设定要留存原始载荷的 CAN ID（DBC 解码用）。"""
+        self._watch_all = bool(watch_all)
+        self._watch = {int(i) & ID_MASK for i in (ids or [])}
+        return len(self._watch)
 
     def _set_baud(self, chn, baud, data_baud):
         """按设备族设置波特率；USBCANFD 只认 canfd_* 两个键，经典设备认 can_baud_rate。"""
@@ -463,10 +521,20 @@ class Engine(object):
                     self._drain(bus, item)
                 snap = self.rx.snapshot() if self.rx else None
                 if snap is not None:
+                    if self._last_payload:
+                        snap["last"] = self._last_payload
                     emit(snap)
             except Exception as exc:
                 log("接收线程异常: %s" % exc, "error")
             self._stop.wait(0.01)
+
+    def _remember(self, bus, can_id, data, stamp, ext=False):
+        """按观察列表留存最近一帧载荷。"""
+        masked = can_id & ID_MASK
+        if not self._watch_all and masked not in self._watch:
+            return
+        slot = self._last_payload.setdefault(bus, {})
+        slot[masked] = {"d": data, "t": int(stamp * 1000), "ext": bool(ext)}
 
     def _drain(self, bus, item):
         """排空一路通道的接收缓冲（经典 CAN 队列 + CANFD 队列）。"""
@@ -494,6 +562,7 @@ class Engine(object):
             else:
                 dlc = min(int(frame.can_dlc), MAX_DLC)
                 data = " ".join("%02X" % frame.data[offset] for offset in range(dlc))
+            self._remember(bus, can_id, data, stamp, bool(can_id & EXT_FLAG))
             self.rx.feed(bus, can_id, dlc, data, stamp)
 
     def _drain_fd(self, bus, item):
@@ -512,6 +581,7 @@ class Engine(object):
             can_id = int(frame.can_id)
             length = min(int(frame.len), 64)
             data = " ".join("%02X" % frame.data[offset] for offset in range(length))
+            self._remember(bus, can_id, data, stamp, bool(can_id & EXT_FLAG))
             self.rx.feed(bus, can_id, length, data, stamp)
 
     # -- 发送 -------------------------------------------------------------
@@ -896,6 +966,16 @@ def main():
             elif name == "close":
                 engine.close()
                 emit({"ev": "ack", "cmd": "close", "ok": True})
+            elif name == "ch_start":
+                emit({"ev": "ack", "cmd": "ch_start", "ok": True,
+                      "data": engine.channel_start(command.get("bus"))})
+            elif name == "ch_stop":
+                emit({"ev": "ack", "cmd": "ch_stop", "ok": True,
+                      "data": engine.channel_stop(command.get("bus"))})
+            elif name == "rx_watch":
+                count = engine.set_rx_watch(command.get("ids"), command.get("all", False))
+                emit({"ev": "ack", "cmd": "rx_watch", "ok": True,
+                      "data": {"count": count}})
             elif name == "tx_load":
                 result = engine.tx_load(command.get("manifest"),
                                         command.get("buses"),
