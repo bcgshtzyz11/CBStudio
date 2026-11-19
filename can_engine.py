@@ -66,6 +66,10 @@ MAX_RX_IDS = 400
 # ZLG 设备类型号中属于 USBCANFD 家族的：波特率键名与初始化类型都按 CANFD 走
 CANFD_DEVICE_TYPES = {41, 42, 43, 59, 76, 77, 78, 79, 80, 81, 85, 86, 87}
 
+# 自动识别时依次尝试的设备类型：先 CANFD 家族，再经典 CAN 盒子
+AUTO_DEVICE_TYPES = (41, 42, 43, 76, 77, 78, 79, 80, 81, 85, 86, 87, 59,
+                     4, 3, 1)
+
 
 def _arg_value(flag):
     """从 argv 里取 ``--flag value``（不引入 argparse，避免干扰主循环）。"""
@@ -78,8 +82,30 @@ def _arg_value(flag):
     return None
 
 
-SDK_DIR_HINT = (_arg_value("--sdk-dir") or os.environ.get("CBSTUDIO_SDK_DIR")
-                or DEFAULT_SDK_DIR)
+SDK_DIR_HINT = _arg_value("--sdk-dir") or os.environ.get("CBSTUDIO_SDK_DIR") or ""
+
+
+def find_sdk_dir(explicit=None):
+    """定位 zlgcan SDK 目录：显式配置 > 环境变量 > 默认目录 > 常见盘符下的 zlgcan* 目录。"""
+    candidates = [explicit, os.environ.get("CBSTUDIO_SDK_DIR"), SDK_DIR_HINT,
+                  DEFAULT_SDK_DIR]
+    for root in ("C:\\", "D:\\", "E:\\", "F:\\", os.path.expanduser("~")):
+        try:
+            for name in os.listdir(root):
+                if "zlgcan" in name.lower():
+                    candidates.append(os.path.join(root, name))
+        except OSError:
+            continue
+    for path in candidates:
+        if not path:
+            continue
+        text = str(path)
+        if os.path.isdir(text) and os.path.isfile(os.path.join(text, "zlgcan.dll")):
+            return text
+    for path in candidates:
+        if path and os.path.isdir(str(path)):
+            return str(path)
+    return ""
 
 
 def load_sdk(sdk_dir=None):
@@ -285,7 +311,7 @@ class Engine(object):
     def open(self, device_type, channels, sdk_dir, stats_ms=STATS_MS_DEFAULT):
         """打开设备并初始化各通道。"""
         self.close()
-        self.sdk_dir = sdk_dir or DEFAULT_SDK_DIR
+        self.sdk_dir = find_sdk_dir(sdk_dir) or DEFAULT_SDK_DIR
         self.stats_ms = int(stats_ms or STATS_MS_DEFAULT)
         if not os.path.isdir(self.sdk_dir):
             raise RuntimeError("zlgcan SDK 目录不存在: %s" % self.sdk_dir)
@@ -301,10 +327,29 @@ class Engine(object):
         self._zlg_fd = module.ZCAN_TYPE_CANFD
         self._transmit_type = module.ZCAN_Transmit_Data
         self.z = ZCAN()
-        self.device = self.z.OpenDevice(int(device_type), 0, 0)
-        if self.device == INVALID_DEVICE_HANDLE:
-            raise RuntimeError("打开 ZLG 设备失败 (device_type=%s)：未插设备 / 被 ZCANPRO 占用 / "
-                               "设备型号不符" % device_type)
+        try:
+            wanted = int(device_type or 0)
+        except (TypeError, ValueError):
+            wanted = 0
+        self.detected_device_type = wanted
+        if wanted <= 0:
+            # 自动识别：逐个型号试探，第一个能打开的就是当前设备
+            self.device = INVALID_DEVICE_HANDLE
+            for candidate in AUTO_DEVICE_TYPES:
+                handle = self.z.OpenDevice(candidate, 0, 0)
+                if handle != INVALID_DEVICE_HANDLE:
+                    self.device = handle
+                    self.detected_device_type = candidate
+                    break
+            if self.device == INVALID_DEVICE_HANDLE:
+                raise RuntimeError("自动识别失败：未找到 ZLG 设备（试过 %d 种型号）"
+                                   "：未插设备 / 被 ZCANPRO 占用" % len(AUTO_DEVICE_TYPES))
+        else:
+            self.device = self.z.OpenDevice(wanted, 0, 0)
+            if self.device == INVALID_DEVICE_HANDLE:
+                raise RuntimeError("打开 ZLG 设备失败 (device_type=%s)：未插设备 / 被 ZCANPRO 占用 / "
+                                   "设备型号不符" % device_type)
+        device_type = self.detected_device_type
         try:
             info = self.z.GetDeviceInf(self.device)
             self.device_info = {"hw": getattr(info, "hw_version", ""),
@@ -358,6 +403,7 @@ class Engine(object):
         self._stim_thread.daemon = True
         self._stim_thread.start()
         return {"device": self.device_info,
+                "device_type": self.detected_device_type,
                 "channels": [{"bus": bus, "ch": item["ch"], "baud": item["baud"],
                               "mode": item["mode"]} for bus, item in self.channels.items()]}
 

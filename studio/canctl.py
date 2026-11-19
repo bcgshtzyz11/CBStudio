@@ -24,8 +24,8 @@ ENGINE_PATH = os.path.join(STUDIO_DIR, "can_engine.py")
 DEFAULT_CAN_CONFIG = {
     "enabled": True,
     "python": "",                       # 空 = 自动（优先 py -3.8-32）
-    "sdk_dir": r"F:/zlgcan_python_260529",
-    "device_type": 41,                  # USBCANFD-200U
+    "sdk_dir": "",                      # 空 = 自动查找 zlgcan SDK
+    "device_type": 0,                   # 0 = 自动识别（先试 CANFD 家族再试经典盒子）
     "stats_ms": 500,
     "manifest": os.path.join(os.path.dirname(STUDIO_DIR), "can_random_tx",
                              "can_matrix_manifest.json"),
@@ -81,6 +81,16 @@ class CanSupervisor(object):
             return [_split_command(configured)]
         return [["py", "-3.8-32"], ["py", "-3"], ["python"]]
 
+    def _device_type_value(self):
+        """设备类型：数字直传；"auto"/空/0 都表示自动识别。"""
+        raw = self._config.get("device_type", 0)
+        if isinstance(raw, str) and raw.strip().lower() in ("", "auto", "0"):
+            return 0
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return 0
+
     def _channel_specs(self):
         """配置里的通道表 -> 引擎期望的 ``[{bus,ch,baud,mode}]``。"""
         specs = []
@@ -131,7 +141,7 @@ class CanSupervisor(object):
 
         try:
             result = self.send("open", {
-                "device_type": int(self._config.get("device_type", 41)),
+                "device_type": self._device_type_value(),
                 "channels": self._channel_specs(),
                 "sdk_dir": self._config.get("sdk_dir"),
                 "stats_ms": int(self._config.get("stats_ms", 500)),

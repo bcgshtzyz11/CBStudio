@@ -61,24 +61,51 @@ def list_serial_ports():
     return result
 
 
-def detect_relay_port(preferred=None):
-    """挑继电器串口：优先用户配置，其次 CH340（VID 1A86）。
+def relay_candidates(preferred=None, exclude=()):
+    """按优先级列出继电器串口候选（跳过别的探针占用的口）。
 
-    返回 ``(port, reason)``；找不到时 ``port`` 为 ``None``。
+    排序：配置指定的口 > CH340（LCUS-4 常见）> 其它 USB 串口 > 板载串口。
+    返回 ``([{"port","desc","hwid","why"}], reason)``。
     """
     ports = list_serial_ports()
+    used = {str(p).upper() for p in (exclude or []) if p}
     if preferred:
         for item in ports:
             if item["port"].upper() == str(preferred).upper():
-                return item["port"], "配置指定"
-        return str(preferred).upper(), "配置指定（当前未枚举到）"
-    candidates = [item for item in ports
-                  if "CH340" in item["desc"].upper() or "1A86" in item["hwid"].upper()]
-    if len(candidates) == 1:
-        return candidates[0]["port"], "自动识别 CH340"
-    if len(candidates) > 1:
-        return None, "检测到 %d 个 CH340，请在设置里指定端口" % len(candidates)
-    return None, "未找到 CH340 继电器串口"
+                return [dict(item, why="配置指定")], "配置指定"
+        return [{"port": str(preferred).upper(), "desc": "", "hwid": "",
+                 "why": "配置指定"}], "配置指定（当前未枚举到）"
+
+    def is_ch340(item):
+        text = (item["desc"] + " " + item["hwid"]).upper()
+        return "CH340" in text or "1A86" in text
+
+    ranked = []
+    for item in ports:
+        if item["port"].upper() in used:
+            continue
+        item = dict(item)
+        if is_ch340(item):
+            item["why"] = "自动识别 CH340"
+            ranked.insert(0, item)
+        else:
+            item["why"] = "自动识别 USB 串口"
+            ranked.append(item)
+    if not ranked:
+        return [], "未找到可用继电器串口（%d 个串口都被占用或不存在）" % len(ports)
+    if len(ranked) > 1:
+        reason = "%s（共 %d 个候选，取第一个）" % (ranked[0]["why"], len(ranked))
+    else:
+        reason = ranked[0]["why"]
+    return ranked, reason
+
+
+def detect_relay_port(preferred=None, exclude=()):
+    """挑一个继电器串口，返回 ``(port, reason)``；找不到时 ``port`` 为 ``None``。"""
+    candidates, reason = relay_candidates(preferred, exclude)
+    if not candidates:
+        return None, reason
+    return candidates[0]["port"], reason
 
 
 class RelayController(object):
@@ -89,8 +116,10 @@ class RelayController(object):
     """
 
     def __init__(self, port=None, baud=DEFAULT_BAUD, dry_run=False, log=None,
-                 states_path=None):
+                 states_path=None, exclude=None):
         self.port = port
+        self.exclude_ports = list(exclude or [])
+        self.exclude_provider = None
         self.baud = int(baud or DEFAULT_BAUD)
         self.dry_run = bool(dry_run)
         self._serial = None
@@ -102,6 +131,17 @@ class RelayController(object):
         self.port_reason = ""
         self._lock = __import__("threading").RLock()
         self.frames_sent = 0
+
+    def _excluded(self):
+        """当前被其它用途占用的串口（例如 DUT 调试口），自动识别时跳过。"""
+        ports = set(self.exclude_ports)
+        provider = self.exclude_provider
+        if provider:
+            try:
+                ports.update(provider() or [])
+            except Exception:
+                pass
+        return ports
 
     # -- 推定状态持久化 ---------------------------------------------------
     def _load_states(self):
@@ -144,19 +184,32 @@ class RelayController(object):
                 self.last_error = "未安装 pyserial"
                 return False, self.last_error
             if not self.port:
-                detected, reason = detect_relay_port(self.port)
+                exclude = self._excluded()
+                candidates, reason = relay_candidates(None, exclude)
                 self.port_reason = reason
-                if not detected:
+                if not candidates:
                     self.last_error = reason
                     return False, reason
-                self.port = detected
-            try:
-                self._serial = serial.Serial(self.port, self.baud, timeout=0.3,
-                                             write_timeout=1.0)
-            except Exception as exc:
-                self.last_error = "打开 %s 失败: %s" % (self.port, exc)
-                self._serial = None
-                return False, self.last_error
+                last_error = None
+                for item in candidates:
+                    try:
+                        self._serial = serial.Serial(item["port"], self.baud,
+                                                     timeout=0.3, write_timeout=1.0)
+                        self.port = item["port"]
+                        self.port_reason = item["why"]
+                        break
+                    except Exception as exc:
+                        last_error = "%s 打不开: %s" % (item["port"], exc)
+                if self._serial is None:
+                    self.last_error = last_error or reason
+                    return False, self.last_error
+            if self._serial is None:
+                try:
+                    self._serial = serial.Serial(self.port, self.baud, timeout=0.3,
+                                                 write_timeout=1.0)
+                except Exception as exc:
+                    self.last_error = "打开 %s 失败: %s" % (self.port, exc)
+                    return False, self.last_error
             time.sleep(0.15)              # CH340 打开后首次写需要一点稳定时间
             if self._log:
                 self._log.info("relay", "继电器串口已打开 %s @%d" % (self.port, self.baud),
