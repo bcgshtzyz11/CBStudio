@@ -413,16 +413,17 @@
       <button class="btn ghost" data-close="settingsModal">✕</button>
     </div>
     <div class="modal-body settings">
+      <datalist id="portOptions"></datalist>
       <h4>继电器（上下电）</h4>
       <div class="form-row">
-        <label class="field"><span>串口</span><input id="setRelayPort" placeholder="COM5"></label>
+        <label class="field"><span>串口</span><input id="setRelayPort" list="portOptions" placeholder="COM5"></label>
         <label class="field"><span>波特率</span><input type="number" id="setRelayBaud"></label>
         <label class="check"><input type="checkbox" id="setRelayDry"> 干跑（不驱动继电器）</label>
       </div>
 
       <h4>DUT 串口（抓取日志 / 判定）</h4>
       <div class="form-row">
-        <label class="field"><span>串口</span><input id="setSerialPort" placeholder="COM4"></label>
+        <label class="field"><span>串口</span><input id="setSerialPort" list="portOptions" placeholder="COM4"></label>
         <label class="field"><span>波特率</span><input type="number" id="setSerialBaud"></label>
         <label class="field"><span>抽样上限</span><input type="number" id="setSerialRate"><em>行/秒</em></label>
         <label class="field" title="上电/上 IG 后 DUT 启动期间，不把「没 adb / 没日志」判成事故">
@@ -451,7 +452,7 @@
         <label class="field"><span>最多保留</span><input type="number" id="setRetRuns"><em>次运行</em></label>
         <label class="field"><span>最长保留</span><input type="number" id="setRetDays"><em>天</em></label>
       </div>
-      <p class="hint">保存后写回 <span class="mono">config.json</span>；串口/CAN 的改动在下次重连或重启后生效。</p>
+      <p class="hint">保存后写回 <span class="mono">config.json</span>；继电器串口/波特率/干跑保存即重连，CAN 的改动在下次连接时生效。</p>
     </div>
     <div class="modal-foot">
       <button class="btn" data-close="settingsModal">取消</button>

@@ -4,7 +4,6 @@
 'use strict';
 
 let clockBase = { elapsed: 0, at: 0, running: false };
-let settingsOpen = false;
 
 /* ---------------------------------------------------------------- 启动 */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -143,7 +142,8 @@ function applySnapshot(snap, initial) {
       : '') + (base ? (' · 基线 ' + (base.count || 0) + ' 条（' + String(base.last_time || '').slice(11) + '）')
                     : ' · 未学基线');
   }
-  if (settingsOpen) fillSettings(snap);
+  // 设置面板只在打开时填一次：以前这里每来一次快照（约 1 秒）就 fillSettings()，
+  // 用户正在输入端口，下一秒就被服务端旧值覆盖，表现为"串口改不了"。
 }
 
 function applyHeader(snap) {
@@ -516,7 +516,7 @@ function bindSettings() {
   $('#btnSettings').addEventListener('click', () => {
     if (!S.snapshot) return;
     fillSettings(S.snapshot);
-    settingsOpen = true;
+    fillPortOptions(S.snapshot);
     $('#settingsModal').classList.remove('hidden');
   });
   $('#btnSettingsApply').addEventListener('click', applySettings);
@@ -561,6 +561,16 @@ function fillSettings(snap) {
       el('span', { text: '波特率' }),
       el('input', { type: 'number', value: item.baud, dataset: { bus, field: 'baud' }, style: 'width:92px' }),
     ]));
+  }
+}
+
+function fillPortOptions(snap) {
+  const list = $('#portOptions');
+  if (!list) return;
+  clear(list);
+  for (const item of (snap && snap.serial_ports) || []) {
+    const desc = item.desc ? (' · ' + item.desc) : '';
+    list.appendChild(el('option', { value: item.port, label: item.port + desc }));
   }
 }
 
@@ -609,9 +619,10 @@ async function applySettings() {
   };
   const res = await API.action('settings.save', { settings });
   if (res && res.ok) {
-    settingsOpen = false;
     $('#settingsModal').classList.add('hidden');
-    toast('设置已保存（串口/CAN 改动重连后生效）', 'ok');
+    const relay = res.relay || {};
+    toast(relay.message ? ('设置已保存；继电器: ' + relay.message) : '设置已保存',
+          relay.ok === false ? 'warn' : 'ok');
   }
 }
 

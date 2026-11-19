@@ -226,6 +226,38 @@ class RelayController(object):
                     pass
                 self._serial = None
 
+    def reconfigure(self, port=None, baud=None, dry_run=None):
+        """改串口/波特率/干跑模式，并立即按新参数重连。
+
+        以前保存设置只改 ``self.port`` 属性，``Serial`` 句柄还绑在旧 COM 上，
+        写指令照样发到老端口；这里统一「关旧口 -> 改参数 -> 重开」，保存即生效。
+        切到干跑时只关串口、不再占 COM。返回 ``(ok, message)``。
+        """
+        with self._lock:
+            new_port = self.port if port is None else (str(port).strip() or None)
+            new_baud = self.baud if not baud else int(baud)
+            new_dry = self.dry_run if dry_run is None else bool(dry_run)
+            unchanged = (new_port == self.port and new_baud == self.baud
+                         and new_dry == self.dry_run)
+            # 参数没变且串口已就绪：不折腾（改别的设置项不该把继电器重连一遍）；
+            # 参数没变但串口没开：当成"再试一次连接"。
+            if unchanged and (new_dry or self._serial is not None):
+                if new_dry:
+                    return True, "参数未变（干跑，串口未占用）"
+                return True, "参数未变，保持 %s @%d" % (self.port, self.baud)
+            self.close()
+            self.port = new_port
+            self.baud = new_baud
+            self.dry_run = new_dry
+            self.last_error = None
+            if new_dry:
+                self.port_reason = "干跑模式（不碰硬件）"
+                return True, "已切到干跑，串口已释放"
+            ok, message = self.open()
+            if not ok:
+                return False, message
+            return True, "已重连 %s @%d" % (self.port, self.baud)
+
     @property
     def is_open(self):
         """串口是否已打开。"""

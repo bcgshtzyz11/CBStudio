@@ -29,11 +29,11 @@ from .channels import ChannelManager
 from .eventlog import EventLog
 from .incidents import IncidentManager
 from .probes import ProbeHub
-from .relay import RelayController
+from .relay import RelayController, list_serial_ports
 from .runner import Runner
 from .sim import SimCanSupervisor
 
-VERSION = "1.0.7"
+VERSION = "1.0.8"
 STUDIO_NAME = "CBStudio · 台架剧本工作台"
 
 
@@ -50,6 +50,8 @@ class StudioApp(object):
         self.bus = EventLog()
         self.started_at = time.time()
         self._dirty = threading.Event()
+        self._ports_cache = []          # 设置页串口下拉（缓存 2 秒）
+        self._ports_cache_at = 0.0
 
         relay_cfg = self.config.get("relay") or {}
         self.relay = RelayController(port=relay_cfg.get("port") or None,
@@ -97,6 +99,15 @@ class StudioApp(object):
         self.read_regions = self._load_read_regions()
 
     # -- 仪表画面 ---------------------------------------------------------
+    def serial_ports(self):
+        """本机串口列表（设置页下拉用；缓存 2 秒，避免每次快照都枚举一遍）。"""
+        now = time.time()
+        if now - self._ports_cache_at < 2.0:
+            return list(self._ports_cache)
+        self._ports_cache = list_serial_ports()
+        self._ports_cache_at = now
+        return list(self._ports_cache)
+
     def relay_ports(self):
         """继电器占用的串口（DUT 串口自动识别时跳过）。"""
         port = getattr(self.relay, "port", None)
@@ -701,6 +712,7 @@ class StudioApp(object):
                 "incident": self.config.get("incident"),
                 "retention": self.config.get("retention"),
             },
+            "serial_ports": self.serial_ports(),
             "paths": {"root": paths.STUDIO_DIR, "runs": paths.RUNS_DIR,
                       "scenarios": paths.SCENARIO_DIR},
             "run_dir": runner.get("run_dir") or self.incidents.run_dir,
@@ -886,8 +898,12 @@ class StudioApp(object):
         merged = config_mod._merge(self.config, settings)
         self.config = merged
         config_mod.save(self.config)
-        self.relay.dry_run = bool((self.config.get("relay") or {}).get("dry_run"))
-        self.relay.port = (self.config.get("relay") or {}).get("port") or self.relay.port
+        relay_cfg = self.config.get("relay") or {}
+        # 串口/波特率/干跑：关旧口再按新参数重开，保存即生效（不再等重启）；
+        # 模拟模式永远干跑，别在保存设置时把真硬件打开。
+        relay_ok, relay_msg = self.relay.reconfigure(
+            relay_cfg.get("port"), relay_cfg.get("baud"),
+            bool(relay_cfg.get("dry_run")) or self.simulate)
         self.channels.reload(self.config)
         self.probes.adb.interval = max(0.3, float(
             (self.config.get("probes") or {}).get("adb", {}).get("interval_ms", 1000)) / 1000.0)
@@ -895,8 +911,9 @@ class StudioApp(object):
         self.probes.serial.reconfigure(serial_cfg)
         self.can.configure(self.config.get("can") or {})
         self.incidents.configure(self.config)
-        self.bus.action("studio", "设置已保存")
-        return {"ok": True, "settings": self.config}
+        self.bus.action("studio", "设置已保存；继电器: %s" % relay_msg)
+        return {"ok": True, "settings": self.config, "serial_ports": self.serial_ports(),
+                "relay": {"ok": relay_ok, "message": relay_msg}}
 
     # ---- 探针 ----
     def _op_probe_toggle(self, payload):
