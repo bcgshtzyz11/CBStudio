@@ -135,25 +135,35 @@ function renderCanModal(snap) {
 
 function renderDbcRows(snap) {
   const dbc = (snap && snap.dbc) || null;
-  const info = $('#dbcInfo');
-  const body = $('#dbcBody');
+  const info = document.querySelector('#dbcInfo');
+  const body = document.querySelector('#dbcBody');
   if (!info || !body) return;
-  if (!dbc) {
+  const busSel = document.querySelector('#dbcBus');
+  const buses = (dbc && dbc.buses) || canChannelRows().map(row => row[0]);
+  if (busSel && busSel.options.length !== buses.length) {
+    clear(busSel);
+    for (const bus of buses) busSel.append(el('option', { value: bus, text: bus }));
+  }
+  if (!dbc || !(dbc.items || []).length) {
     info.textContent = '未导入';
     clear(body);
     return;
   }
-  info.textContent = dbc.name + '：' + dbc.messages + ' 报文 / ' + dbc.signals + ' 信号'
-    + (dbc.rows && dbc.rows.length ? '，实时 ' + dbc.rows.length + ' 个信号' : '，暂无实时数据');
+  const items = dbc.items;
+  info.textContent = items.map(it => it.bus + '：' + it.name + '（' + it.messages + ' 报文 / '
+    + it.signals + ' 信号，实时 ' + (it.rows || []).length + '）').join('；');
   clear(body);
-  for (const row of (dbc.rows || []).slice(0, 60)) {
-    body.append(el('tr', {}, [
-      el('td', { text: row.bus }),
-      el('td', { text: row.msg + ' (0x' + row.id.toString(16).toUpperCase() + ')' }),
-      el('td', { text: row.signal }),
-      el('td', { text: row.value }),
-      el('td', { text: row.unit || '' }),
-    ]));
+  for (const it of items) {
+    body.append(el('tr', {}, [el('td', { text: it.bus + ' · ' + it.name, colspan: 5 })]));
+    for (const row of (it.rows || []).slice(0, 40)) {
+      body.append(el('tr', {}, [
+        el('td', { text: it.bus }),
+        el('td', { text: row.msg + ' (0x' + row.id.toString(16).toUpperCase() + ')' }),
+        el('td', { text: row.signal }),
+        el('td', { text: row.value }),
+        el('td', { text: row.unit || '' }),
+      ]));
+    }
   }
 }
 
@@ -203,9 +213,11 @@ function bindCanModal() {
       const picked = file.files && file.files[0];
       if (!picked) return;
       const text = await picked.text();
-      const res = await API.action('can.dbc_import', { name: picked.name, text });
+      const busSel = document.querySelector('#dbcBus');
+      const bus = (busSel && busSel.value) || '';
+      const res = await API.action('can.dbc_import', { bus, name: picked.name, text });
       if (res && res.ok) {
-        toast('DBC 已导入：' + res.messages + ' 报文 / ' + res.signals + ' 信号', 'ok');
+        toast('DBC 已绑到 ' + res.bus + '：' + res.messages + ' 报文 / ' + res.signals + ' 信号', 'ok');
         renderDbcRows(S.snapshot || {});
       } else {
         toast((res && res.message) || '导入失败', 'error');
@@ -216,7 +228,8 @@ function bindCanModal() {
   const clearDbc = $('#btnDbcClear');
   if (clearDbc) {
     clearDbc.addEventListener('click', async () => {
-      await API.action('can.dbc_clear', {});
+      const busSel = document.querySelector('#dbcBus');
+      await API.action('can.dbc_clear', { bus: (busSel && busSel.value) || '' });
       toast('已清除 DBC', 'ok');
       renderDbcRows(S.snapshot || {});
     });

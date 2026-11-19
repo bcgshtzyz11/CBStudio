@@ -91,9 +91,8 @@ class StudioApp(object):
         self.screens = __import__("collections").deque(maxlen=20)
         self._screen_seq = 0
         self.BASELINE_MAX = 8
-        self.dbc = None
-        self.dbc_name = ""
-        self._load_dbc()
+        self.dbcs = {}                  # bus -> {"name": str, "model": [DbcMessage]}
+        self._load_dbcs()
         self.screen_baseline = self._load_screen_baseline()
         self.read_regions = self._load_read_regions()
 
@@ -166,26 +165,54 @@ class StudioApp(object):
                 return shot
         return None
 
-    # -- DBC（报文信号解码） -----------------------------------------------
-    def dbc_path(self):
-        """当前 DBC 的缓存路径。"""
-        return os.path.join(paths.DATA_DIR, "dbc", "current.json")
+    # -- DBC（按通道绑定） -------------------------------------------------
+    def dbc_dir(self):
+        """DBC 缓存目录（每路一个文件）。"""
+        return os.path.join(paths.DATA_DIR, "dbc")
 
-    def _load_dbc(self):
-        """启动时恢复上次导入的 DBC。"""
-        try:
-            self.dbc = dbc_mod.load(self.dbc_path())
-            self.dbc_name = "上次导入"
-        except (OSError, ValueError, KeyError):
-            self.dbc = None
+    def dbc_path(self, bus):
+        """某一路通道的 DBC 缓存路径。"""
+        return os.path.join(self.dbc_dir(), "%s.json" % bus)
+
+    def _load_dbcs(self):
+        """启动时恢复各路通道的 DBC。"""
+        self.dbcs = {}
+        folder = self.dbc_dir()
+        if not os.path.isdir(folder):
+            return
+        for name in os.listdir(folder):
+            if not name.endswith(".json"):
+                continue
+            bus = name[:-5]
+            try:
+                if bus == "current":
+                    continue
+                with open(os.path.join(folder, name), "r", encoding="utf-8") as handle:
+                    raw = json.load(handle)
+                if isinstance(raw, dict):
+                    meta = raw.get("meta") or {}
+                    messages = raw.get("messages") or []
+                else:
+                    meta = {"name": name}
+                    messages = raw
+                model = dbc_mod.load_model(messages)
+                if not model:
+                    continue
+                self.dbcs[bus] = {"name": meta.get("name") or name, "model": model}
+            except (OSError, ValueError, KeyError):
+                continue
+
+    def dbc_bus_list(self):
+        """可用于绑定的通道列表。"""
+        return list(self.can.channels.keys()) or ["ican", "pcan"]
 
     def dbc_view(self, limit=200):
-        """把 DBC 信号与最近收到的载荷合成为界面表格行。"""
-        if not self.dbc:
+        """每路通道的 DBC 与其最近收到的信号值。"""
+        if not self.dbcs:
             return None
-        payloads = getattr(self.can, "last_payload", None) or {}
         preview = self._can_ids_preview(limit=400) or {}
-        for bus, items in (preview or {}).items():
+        payloads = {}
+        for bus, items in preview.items():
             for item in items or []:
                 raw_id = item.get("id")
                 try:
@@ -197,29 +224,33 @@ class StudioApp(object):
                 except (TypeError, ValueError):
                     continue
                 payloads.setdefault(bus, {})[key] = {
-                    "d": item.get("data") or "", "t": 0, "ext": True}
-        rows = []
-        for message in self.dbc:
-            masked = message.can_id & 0x1FFFFFFF
-            for bus, items in payloads.items():
-                entry = items.get(str(masked)) or items.get(str(message.can_id))
-                if not entry:
+                    "d": item.get("data") or "", "t": 0}
+        items_out = []
+        for bus, entry in self.dbcs.items():
+            model = entry.get("model") or []
+            rows = []
+            bus_payloads = payloads.get(bus) or {}
+            for message in model:
+                masked = message.can_id & 0x1FFFFFFF
+                payload = bus_payloads.get(str(masked))
+                if not payload:
                     continue
-                data = dbc_mod.load_payload(entry.get("d"))
+                data = dbc_mod.load_payload(payload.get("d"))
                 for signal in message.signals:
                     value = dbc_mod.decode_signal(signal, data)
                     if value is None:
                         continue
                     rows.append({"bus": bus, "id": message.can_id, "msg": message.name,
                                  "signal": signal.name, "value": round(value, 3),
-                                 "unit": signal.unit, "t": entry.get("t", 0)})
+                                 "unit": signal.unit})
                     if len(rows) >= limit:
-                        return {"name": self.dbc_name, "messages": len(self.dbc),
-                                "signals": sum(len(m.signals) for m in self.dbc),
-                                "rows": rows, "truncated": True}
-        return {"name": self.dbc_name, "messages": len(self.dbc),
-                "signals": sum(len(m.signals) for m in self.dbc),
-                "rows": rows, "truncated": False}
+                        break
+                    # 只解本通道自己的载荷：ID 在别的总线上出现不参与
+            items_out.append({"bus": bus, "name": entry.get("name") or "",
+                              "messages": len(model),
+                              "signals": sum(len(m.signals) for m in model),
+                              "rows": rows})
+        return {"items": items_out, "buses": self.dbc_bus_list()}
 
     # -- 各指标的读数区域（可分别圈选） -----------------------------------
     METRIC_DEFS = {
@@ -937,37 +968,44 @@ class StudioApp(object):
             return {"ok": False, "message": str(exc)}
 
     def _op_can_dbc_import(self, payload):
-        """导入 DBC 文本：解析报文/信号，并让引擎留存这些 ID 的原始载荷。"""
+        """把 DBC 绑到某一路通道：只解这一路收到的帧。"""
+        bus = str(payload.get("bus") or "").strip()
+        buses = self.dbc_bus_list()
+        if not bus:
+            bus = buses[0] if buses else "ican"
+        if bus not in buses:
+            bus = buses[0] if buses else bus
         text = payload.get("text") or ""
         name = (payload.get("name") or "import.dbc").strip()
         model = dbc_mod.parse(text)
         if not model:
             return {"ok": False, "message": "没解析到报文，确认是 DBC 文本（BO_ / SG_ 行）"}
-        self.dbc = model
-        self.dbc_name = name
+        self.dbcs[bus] = {"name": name, "model": model}
         try:
-            dbc_mod.save(model, self.dbc_path())
+            dbc_mod.save(model, self.dbc_path(bus), name)
         except OSError as exc:
             return {"ok": False, "message": "缓存失败: %s" % exc}
-        ids = sorted({message.can_id for message in model})
+        ids = sorted({message.can_id & 0x1FFFFFFF for message in model})
         try:
             self.can.set_rx_watch(ids)
         except Exception:
             pass
         total = sum(len(message.signals) for message in model)
-        self.bus.action("can", "DBC 已导入：%s（%d 报文 / %d 信号）" % (name, len(model), total))
-        return {"ok": True, "messages": len(model), "signals": total, "ids": ids}
+        self.bus.action("can", "DBC 已绑到 %s：%s（%d 报文 / %d 信号）" % (bus, name, len(model), total))
+        return {"ok": True, "bus": bus, "messages": len(model), "signals": total, "ids": ids}
 
     def _op_can_dbc_clear(self, payload):
-        """清掉已导入的 DBC。"""
-        self.dbc = None
-        self.dbc_name = ""
-        try:
-            if os.path.isfile(self.dbc_path()):
-                os.remove(self.dbc_path())
-        except OSError:
-            pass
-        return {"ok": True}
+        """清除某一路（或不传 = 全部）通道的 DBC。"""
+        bus = str(payload.get("bus") or "").strip()
+        targets = [bus] if bus else list(self.dbcs.keys())
+        for target in targets:
+            self.dbcs.pop(target, None)
+            try:
+                if os.path.isfile(self.dbc_path(target)):
+                    os.remove(self.dbc_path(target))
+            except OSError:
+                pass
+        return {"ok": True, "cleared": targets}
 
     def _op_can_disconnect(self, payload):
         self.can.stop()

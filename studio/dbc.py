@@ -149,19 +149,19 @@ def load_payload(text):
         return []
 
 
-def save(model, path):
-    """把解析结果存成 JSON（供下次启动直接加载）。"""
+def save(model, path, name=""):
+    """把解析结果存成 JSON（带名称，供下次启动直接加载）。"""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    payload = {"meta": {"name": name or os.path.basename(path)},
+               "messages": [msg.to_dict() for msg in model]}
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump([msg.to_dict() for msg in model], handle, ensure_ascii=False)
+        json.dump(payload, handle, ensure_ascii=False)
 
 
-def load(path):
-    """从 JSON 恢复解析结果。"""
-    with open(path, "r", encoding="utf-8") as handle:
-        raw = json.load(handle)
+def load_model(raw):
+    """从 `[{id,name,dlc,signals}]` 结构恢复报文列表。"""
     messages = []
-    for item in raw:
+    for item in raw or []:
         msg = DbcMessage(item["id"], item["name"], item["dlc"], item.get("sender", ""))
         for sig in item.get("signals") or []:
             msg.signals.append(DbcSignal(
@@ -170,3 +170,12 @@ def load(path):
                 sig.get("offset", 0), "", "", sig.get("unit", ""), ""))
         messages.append(msg)
     return messages
+
+
+def load(path):
+    """从 JSON 恢复解析结果（兼容旧的无 meta 列表格式）。"""
+    with open(path, "r", encoding="utf-8") as handle:
+        raw = json.load(handle)
+    if isinstance(raw, dict):
+        return load_model(raw.get("messages") or [])
+    return load_model(raw)
