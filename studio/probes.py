@@ -122,6 +122,20 @@ class SerialProbe(object):
         self._thread.daemon = True
         self._thread.start()
 
+    def disable(self):
+        """关闭采集并释放串口（供界面手动关）。"""
+        self.enabled = False
+        self.stop()
+        self.state = "disabled"
+        self.message = "已关闭"
+
+    def enable(self):
+        """重新开启采集。"""
+        self.enabled = True
+        self.state = "closed"
+        self.message = ""
+        self.start()
+
     def stop(self):
         """停止读线程并关闭串口。"""
         self._stop.set()
@@ -384,6 +398,7 @@ class SerialProbe(object):
                 "message": self.message,
                 "port": self.port,
                 "port_reason": self.port_reason,
+                "enabled": bool(self.enabled),
                 "baud": self.baud,
                 "lines": self.lines,
                 "bytes": self.bytes,
@@ -441,6 +456,16 @@ class AdbProbe(object):
         self.error = ""
         self._sim_uptime = 12.0
         self._sim_size = 180000.0
+
+    def disable(self):
+        """关闭 adb 采样（不再占 adb 服务，界面显示已关闭）。"""
+        self.enabled = False
+        self.stop()
+
+    def enable(self):
+        """重新开启 adb 采样。"""
+        self.enabled = True
+        self.start()
 
     def start(self):
         """启动采样线程。"""
@@ -515,8 +540,10 @@ class AdbProbe(object):
         """界面用 adb 状态。"""
         with self._lock:
             return {
-                "state": ("online" if self.online
-                          else ("offline" if self.ever_online else "unknown")),
+                "state": ("disabled" if not self.enabled
+                          else ("online" if self.online
+                                else ("offline" if self.ever_online else "unknown"))),
+                "enabled": bool(self.enabled),
                 "exe": self.runner.exe_path,
                 "online": self.online,
                 "ever_online": self.ever_online,

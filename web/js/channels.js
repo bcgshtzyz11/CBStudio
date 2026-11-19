@@ -79,21 +79,30 @@ function renderProbes(snap) {
   const can = snap.can || {};
 
   const serialRow = $('#probeSerial');
+  const serialOff = serial.enabled === false || serial.state === 'disabled';
   const serialOk = serial.state === 'open';
-  serialRow.className = 'probe-row ' + (serialOk ? 'ok' : (serial.state === 'error' ? 'err' : 'warn'));
-  $('#probeSerialDetail').textContent = serialOk
-    ? serial.port + ' @' + serial.baud + ' · 已收 ' + (serial.lines || 0) + ' 行'
-    : (serial.message || '未打开');
-  $('#probeSerialRate').textContent = (serial.fps || 0).toFixed(0) + ' 行/s';
+  serialRow.className = 'probe-row '
+    + (serialOff ? 'off' : (serialOk ? 'ok' : (serial.state === 'error' ? 'err' : 'warn')));
+  $('#probeSerialDetail').textContent = serialOff
+    ? '已关闭（串口已释放）'
+    : (serialOk
+      ? serial.port + ' @' + serial.baud + ' · 已收 ' + (serial.lines || 0) + ' 行'
+      : (serial.message || '未打开'));
+  $('#probeSerialRate').textContent = serialOff ? '—' : (serial.fps || 0).toFixed(0) + ' 行/s';
+  const serialBtn = $('#btnProbeSerial');
+  if (serialBtn) serialBtn.textContent = serialOff ? '开启' : '关闭';
 
   const adbRow = $('#probeAdb');
-  adbRow.className = 'probe-row ' + (adb.online ? 'ok' : (adb.ever_online ? 'err' : 'warn'));
-  $('#probeAdbDetail').textContent = adb.online
+  const adbOff = adb.enabled === false || adb.state === 'disabled';
+  adbRow.className = 'probe-row ' + (adbOff ? 'off' : (adb.online ? 'ok' : (adb.ever_online ? 'err' : 'warn')));
+  const adbBtn = $('#btnProbeAdb');
+  if (adbBtn) adbBtn.textContent = adbOff ? '开启' : '关闭';
+  $('#probeAdbDetail').textContent = adbOff ? '已关闭' : (adb.online
     ? '在线 · uptime ' + fmtMs((adb.uptime_s || 0) * 1000) + ' · 日志 ' + fmtSize(adb.log_size)
-    : (adb.ever_online ? '已离线 ' + fmtMs(adb.offline_ms) : '未检测到设备');
-  $('#probeAdbRate').textContent = adb.online
-    ? (adb.growth > 0 ? '+' + fmtSize(adb.growth) + '/s' : '日志未增长')
-    : '—';
+    : (adb.ever_online ? '已离线 ' + fmtMs(adb.offline_ms) : '未检测到设备'));
+  $('#probeAdbRate').textContent = (adbOff || !adb.online)
+    ? '—'
+    : (adb.growth > 0 ? '+' + fmtSize(adb.growth) + '/s' : '日志未增长');
 
   const canRow = $('#probeCan');
   const canRunning = can.state === 'running';

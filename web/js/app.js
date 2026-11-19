@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindModals();
   bindRegionPicker();
   bindCanModal();
+  bindProbeToggles();
   bindKeys();
   bindTabs();
 
@@ -315,6 +316,24 @@ function bindTabs() {
       if (body) body.classList.remove('hidden');
     });
   });
+}
+
+/* ---------------------------------------------------------------- 采集开关 */
+function bindProbeToggles() {
+  const bind = (selector, which) => {
+    const btn = document.querySelector(selector);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const snap = S.snapshot || {};
+      const probe = (snap.probe && snap.probe[which]) || {};
+      const off = probe.enabled === false || probe.state === 'disabled';
+      const res = await API.action('probe.toggle', { which, enabled: off });
+      if (res && res.ok) toast(off ? '已开启采集' : '已关闭采集（资源已释放）', 'ok');
+      else toast((res && res.message) || '操作失败', 'error');
+    });
+  };
+  bind('#btnProbeSerial', 'serial');
+  bind('#btnProbeAdb', 'adb');
 }
 
 /* ---------------------------------------------------------------- 读数区域圈选 */

@@ -899,6 +899,31 @@ class StudioApp(object):
         return {"ok": True, "settings": self.config}
 
     # ---- 探针 ----
+    def _op_probe_toggle(self, payload):
+        """手动开关采集探针（串口 / adb），关闭后立即释放资源。"""
+        which = str(payload.get("which") or "").strip()
+        enabled = bool(payload.get("enabled"))
+        targets = ["serial", "adb"] if which in ("all", "") else [which]
+        done = []
+        for name in targets:
+            probe = getattr(self.probes, name, None)
+            if probe is None:
+                continue
+            if name == "serial":
+                probe.enable() if enabled else probe.disable()
+            elif name == "adb":
+                probe.enable() if enabled else probe.disable()
+            probes_cfg = self.config.setdefault("probes", {}).setdefault(name, {})
+            probes_cfg["enabled"] = enabled
+            done.append(name)
+        if done:
+            config_mod.save(self.config)
+            self.bus.action("probe", "%s采集已%s" % (
+                "、".join("DUT 串口" if n == "serial" else "SOC(adb)" for n in done),
+                "开启" if enabled else "关闭"))
+        return {"ok": bool(done), "message": "已%s %s" % (
+            "开启" if enabled else "关闭", "、".join(done) or "无")}
+
     def _op_probe_restart(self, payload):
         if payload.get("serial"):
             self.probes.serial.reconfigure(payload["serial"])

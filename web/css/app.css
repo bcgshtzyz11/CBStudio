@@ -683,3 +683,5 @@ button { cursor: pointer; }
 .screen-wrap.zoom img { width: auto; min-width: 100%; }
 select, option { color-scheme: dark; }
 select option { background: #1b2430; color: #e6edf5; }
+
+.probe-row.off { opacity: 0.55; }
