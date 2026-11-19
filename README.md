@@ -43,7 +43,7 @@ CAN 部分由 32 位 Python 3.8 子进程跑（ZLG SDK 只有 32 位 DLL），�
 | 32 位解释器 | `can.python = ""` | 环境变量 `CBSTUDIO_PYTHON`/`CBSTUDIO_PY32` → `py -3.8-32` → 本机 `Python3*-32` / ZCANPRO 自带 `python38` → PATH 上的 `python`；拉起后按 hello 回报的位数筛掉 64 位 |
 | ZLG SDK 目录 | `can.sdk_dir = ""` | 环境变量 `CBSTUDIO_SDK_DIR` → 随包 `sdk/zlgcan` → 默认目录 → 各盘符下含 `zlgcan.dll` 的 `zlgcan*` 目录 |
 | 报文清单 | `can.manifest = "can_matrix_manifest.json"` | 相对路径按工作台目录解析，从任何目录启动都能找到；缺失时报出解析后的绝对路径 |
-| DUT 调试串口 | `probes.serial.port = ""` | 枚举串口，优先 Prolific/FTDI/CP210x（`067B`/`0403`/`10C4`），跳过继电器口，逐个按波特率试开 |
+| DUT 调试串口 | `probes.serial.port = ""` | 枚举串口，优先 Prolific/FTDI/CP210x（`067B`/`0403`/`10C4`），跳过继电器口（含继电器自动识别的首选口），逐个按波特率试开 |
 | adb 路径 | `probes.adb.exe = ""` | PATH → 随包 `platform-tools/` → Android SDK（`ANDROID_HOME` / `%LOCALAPPDATA%\Android\Sdk`）→ 常见安装位置 |
 
 继电器口与 DUT 口互相排除，不会抢同一个口。识别结果写进日志与状态栏，例如：
@@ -333,6 +333,16 @@ server.py       HTTP + SSE
 ---
 
 ## 9. 版本
+
+v1.0.9 — 修复「继电器识别不到」（DUT 串口把继电器口抢了）：
+
+- 继电器在启动时打开失败（口被别的程序占着等），`relay.port` 会是空的；这时 DUT
+  串口自动识别只排除「已配置的继电器口」，等于没排除——它会把唯一的 CH340 抢走，
+  继电器此后一直 `PermissionError`，界面上就是「继电器识别不到」。
+- 现在 DUT 口识别会把**继电器自动识别的首选口也预留出来**（继电器没打开也留），
+  拿不到调试口时给出明确原因：`没有可用的调试串口（COM8 留给继电器…）`。
+- 第二个 CH340 / Prolific 等照样能当 DUT 口，不受影响。要强行用同一个口当 DUT 口，
+  就在设置里显式填端口（显式配置不走自动识别）。
 
 v1.0.8 — 设置页串口修复（保存即生效）：
 

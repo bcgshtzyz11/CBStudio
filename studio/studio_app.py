@@ -33,7 +33,7 @@ from .relay import RelayController, list_serial_ports
 from .runner import Runner
 from .sim import SimCanSupervisor
 
-VERSION = "1.0.8"
+VERSION = "1.0.9"
 STUDIO_NAME = "CBStudio · 台架剧本工作台"
 
 

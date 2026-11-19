@@ -169,7 +169,11 @@ class SerialProbe(object):
 
     # -- 内部 -------------------------------------------------------------
     def _excluded_ports(self):
-        """被其它用途占用的串口（继电器、adb 适配器等），自动识别时跳过。"""
+        """被其它用途占用的串口（继电器、adb 适配器等），自动识别时跳过。
+
+        继电器口即使当前没打开（启动时被别的程序占着、打开失败）也要留出来：
+        否则 DUT 探针会把唯一的 CH340 抢走，继电器之后再也开不了这个口。
+        """
         ports = set()
         provider = self.exclude_provider
         if provider:
@@ -177,10 +181,23 @@ class SerialProbe(object):
                 ports.update(str(p).upper() for p in (provider() or []) if p)
             except Exception:
                 pass
+        if not ports:
+            # 继电器还没定口：把它自动识别的首选口预留出来
+            try:
+                from .relay import relay_candidates
+                candidates, _reason = relay_candidates(None, ())
+                if candidates:
+                    ports.add(str(candidates[0]["port"]).upper())
+            except Exception:
+                pass
         return ports
 
     def _detect_port(self):
-        """自动挑 DUT 调试口：优先 Prolific/FTDI/CP210x，其次其它 USB 串口，最后 CH340。"""
+        """自动挑 DUT 调试口：优先 Prolific/FTDI/CP210x，其次其它 USB 串口，最后 CH340。
+
+        继电器的口（已配置的，或自动识别出来的首选口）一律跳过——它打不开时也留着，
+        不然探针把口抢走，继电器就再也连不上了。
+        """
         from .relay import list_serial_ports
         used = self._excluded_ports()
         ranked = []
@@ -205,6 +222,9 @@ class SerialProbe(object):
                 return port, "%s %s" % (why, desc or "")
             except Exception:
                 continue
+        if used:
+            return None, ("没有可用的调试串口（%s 留给继电器，%d 个候选都打不开）"
+                          % ("/".join(sorted(used)), len(ranked)))
         return None, "没有可用的调试串口（%d 个候选都打不开）" % len(ranked)
 
     def _open_port(self):
