@@ -18,14 +18,15 @@ DEFAULTS = {
     "simulate": False,               # true = 全模拟（不碰继电器/CAN/串口/adb）
     "server": {"host": "127.0.0.1", "port": 8777, "open_browser": True},
     "channels": DEFAULT_CHANNELS,
-    "relay": {"port": "COM5", "baud": 9600, "dry_run": False},
+    # 端口/路径留空 = 自动识别（继电器口、DUT 串口、adb、32 位解释器、SDK、清单）
+    "relay": {"port": "", "baud": 9600, "dry_run": False},
     "can": dict(DEFAULT_CAN_CONFIG),
     "probes": {
         # 上电/上 IG 之后 DUT 要启动，这段时间内"没 adb / 没日志"属正常，不判事故
         "boot_grace_ms": 25000,
-        "serial": {"enabled": True, "port": "COM4", "baud": 460800, "log_rate": 40},
+        "serial": {"enabled": True, "port": "", "baud": 460800, "log_rate": 40},
         "adb": {"enabled": True, "interval_ms": 1000,
-                "exe": r"F:\BaiduNetdiskDownload\platform-tools-latest-windows\platform-tools\adb.exe",
+                "exe": "",
                 "log_path": "/userdata/log/mcu/mcu/mcu.log"},
     },
     "incident": {

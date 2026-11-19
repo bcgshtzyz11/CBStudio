@@ -33,7 +33,7 @@ from .relay import RelayController
 from .runner import Runner
 from .sim import SimCanSupervisor
 
-VERSION = "1.0.4"
+VERSION = "1.0.7"
 STUDIO_NAME = "CBStudio · 台架剧本工作台"
 
 

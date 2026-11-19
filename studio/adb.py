@@ -20,7 +20,7 @@ import tempfile
 import time
 import zlib
 
-DEFAULT_ADB = r"F:\BaiduNetdiskDownload\platform-tools-latest-windows\platform-tools\adb.exe"
+DEFAULT_ADB = ""            # 空 = 自动探测（PATH / 随包 platform-tools / 常见安装位置）
 DEFAULT_LOG_PATH = "/userdata/log/mcu/mcu/mcu.log"
 STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -188,7 +188,7 @@ def _bgra_to_png(raw_path, width, height, out_png, out_width=960, region=None):
 
 
 def find_adb(exe_path=None):
-    """定位 adb：优先用户配置的路径，其次 PATH、常见安装位置、工具目录。"""
+    """定位 adb：用户配置 > PATH > 随包 platform-tools > Android SDK / 常见安装位置。"""
     candidates = []
     if exe_path:
         candidates.append(exe_path)
@@ -196,9 +196,12 @@ def find_adb(exe_path=None):
     if found:
         candidates.append(found)
     candidates.extend([
-        DEFAULT_ADB,
+        os.path.join(STUDIO_DIR, "platform-tools", "adb.exe"),
         os.path.join(os.path.dirname(STUDIO_DIR), "platform-tools", "adb.exe"),
         os.path.join(STUDIO_DIR, "tools", "adb.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe"),
+        os.path.expandvars(r"%ANDROID_HOME%\platform-tools\adb.exe"),
+        os.path.expandvars(r"%ANDROID_SDK_ROOT%\platform-tools\adb.exe"),
         r"C:\platform-tools\adb.exe",
         r"C:\Android\platform-tools\adb.exe",
     ])

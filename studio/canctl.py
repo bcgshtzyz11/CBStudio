@@ -11,6 +11,7 @@
 对外只暴露状态与动作，不暴露协议细节。
 """
 
+import glob
 import json
 import os
 import subprocess
@@ -23,12 +24,12 @@ ENGINE_PATH = os.path.join(STUDIO_DIR, "can_engine.py")
 
 DEFAULT_CAN_CONFIG = {
     "enabled": True,
-    "python": "",                       # 空 = 自动（优先 py -3.8-32）
-    "sdk_dir": "",                      # 空 = 自动查找 zlgcan SDK
+    "python": "",                       # 空 = 自动（见 _python_candidates）
+    "sdk_dir": "",                      # 空 = 自动（先找随包的 sdk/zlgcan，再扫盘符）
     "device_type": 0,                   # 0 = 自动识别（先试 CANFD 家族再试经典盒子）
     "stats_ms": 500,
-    "manifest": os.path.join(os.path.dirname(STUDIO_DIR), "can_random_tx",
-                             "can_matrix_manifest.json"),
+    # 相对路径按工作台目录解析，换机器 / 换启动目录都不用改
+    "manifest": "can_matrix_manifest.json",
     "channels": {
         "ican": {"ch": 0, "baud": 500000},
         "pcan": {"ch": 1, "baud": 500000},
@@ -39,6 +40,75 @@ DEFAULT_CAN_CONFIG = {
 def _split_command(text):
     """把 ``"py -3.8-32"`` 这类命令行拆成 argv。"""
     return [part for part in str(text or "").split() if part]
+
+
+def _glob_pythons():
+    """扫本机常见位置的 ``python.exe``（含 ZLG ZCANPRO 自带的 32 位解释器）。
+
+    这里只负责"找候选"，不判断位数：候选逐个拉起 can_engine，由 hello 回报的
+    ``bits`` 决定用不用，所以 64 位的会被自动跳过。
+    """
+    patterns = [
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Python\Python3*-32\python.exe"),
+        os.path.expandvars(r"%PROGRAMFILES(X86)%\Python3*\python.exe"),
+        r"C:\Python3*-32\python.exe",
+        r"C:\Program Files (x86)\Python3*\python.exe",
+        r"C:\Program Files\Python3*-32\python.exe",
+    ]
+    for drive in ("C", "D", "E", "F"):
+        root = drive + ":\\"
+        if not os.path.isdir(root):
+            continue
+        patterns += [
+            os.path.join(root, "Python3*-32", "python.exe"),
+            os.path.join(root, "*", "python38", "python.exe"),
+            os.path.join(root, "*", "ZCANPRO", "python38", "python.exe"),
+            os.path.join(root, "*", "*", "ZCANPRO", "python38", "python.exe"),
+        ]
+    found = []
+    seen = set()
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            key = os.path.normcase(os.path.abspath(path))
+            if key in seen or not os.path.isfile(path):
+                continue
+            seen.add(key)
+            found.append(path)
+    return found
+
+
+_PYTHON_CANDIDATES = None
+
+
+def _python_candidates():
+    """可能跑得动 can_engine 的解释器（按优先级，进程内缓存一次）。
+
+    顺序：环境变量 ``CBSTUDIO_PYTHON`` / ``CBSTUDIO_PY32`` > py 启动器 >
+    本机扫到的 ``python.exe`` > PATH 上的 python / python3。
+    """
+    global _PYTHON_CANDIDATES
+    if _PYTHON_CANDIDATES is not None:
+        return list(_PYTHON_CANDIDATES)
+    commands = []
+    for env_name in ("CBSTUDIO_PYTHON", "CBSTUDIO_PY32"):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            commands.append(_split_command(value))
+    commands += [["py", "-3.8-32"], ["py", "-3.10-32"], ["py", "-3"]]
+    commands += [[path] for path in _glob_pythons()]
+    commands += [["python"], ["python3"]]
+    seen = set()
+    unique = []
+    for command in commands:
+        if not command:
+            continue
+        key = os.path.normcase(" ".join(command))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(command)
+    _PYTHON_CANDIDATES = unique
+    return list(unique)
 
 
 class CanSupervisor(object):
@@ -79,7 +149,7 @@ class CanSupervisor(object):
         configured = str(self._config.get("python") or "").strip()
         if configured:
             return [_split_command(configured)]
-        return [["py", "-3.8-32"], ["py", "-3"], ["python"]]
+        return _python_candidates()
 
     def _device_type_value(self):
         """设备类型：数字直传；"auto"/空/0 都表示自动识别。"""
@@ -310,10 +380,22 @@ class CanSupervisor(object):
                     raise RuntimeError("引擎无响应: %s" % cmd)
                 self._ack_cond.wait(min(remain, 0.5))
 
+    def resolve_manifest_path(self, path=None):
+        """把报文清单路径解析成绝对路径（相对路径一律按工作台目录算）。"""
+        text = str(path or self._config.get("manifest") or "").strip()
+        if not text:
+            text = "can_matrix_manifest.json"
+        if not os.path.isabs(text):
+            text = os.path.join(STUDIO_DIR, text)
+        return os.path.abspath(text)
+
     def load_manifest(self, path=None, opts=None):
         """载入报文清单（发送任务）。"""
         options = dict(opts or {})
-        payload = {"manifest": os.path.abspath(path or self._config.get("manifest")),
+        manifest_path = self.resolve_manifest_path(path)
+        if not os.path.isfile(manifest_path):
+            raise RuntimeError("报文清单不存在: %s" % manifest_path)
+        payload = {"manifest": manifest_path,
                    "buses": options.get("buses") or list(self.channels.keys()),
                    "seed": options.get("seed"),
                    "rand_mode": options.get("rand_mode", "per-frame"),

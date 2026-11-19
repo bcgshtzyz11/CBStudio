@@ -1,0 +1,14 @@
+# CBStudio 台架工作台 —— 主进程依赖
+#
+# 安装：
+#     python -m pip install -r requirements.txt
+#
+# 说明：
+#   * pyserial  读 DUT 调试串口 / 驱动 LCUS-4 继电器（**必需**）
+#   * openpyxl  只在用 gen_manifest.py 从 CAN 矩阵 Excel 重新生成报文清单时需要
+#
+# CAN 子进程用的 32 位 Python 另有一套（zlgcan 已随包放在 sdk/zlgcan/，
+# 不需要 pip 安装；需要的是那个 32 位解释器本身的路径）。
+
+pyserial>=3.5
+openpyxl>=3.1

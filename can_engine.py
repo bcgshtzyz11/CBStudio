@@ -34,6 +34,7 @@
 
 from __future__ import print_function
 
+import glob
 import json
 import os
 import random
@@ -85,10 +86,36 @@ def _arg_value(flag):
 SDK_DIR_HINT = _arg_value("--sdk-dir") or os.environ.get("CBSTUDIO_SDK_DIR") or ""
 
 
+def _project_sdk_dirs():
+    """随包放在项目里的 SDK 目录（``sdk/zlgcan`` 等），换机器时不用另装。"""
+    patterns = [
+        os.path.join(HERE, "sdk", "zlgcan"),
+        os.path.join(HERE, "sdk"),
+        os.path.join(HERE, "zlgcan"),
+        os.path.join(HERE, "sdk", "*"),
+        os.path.join(os.path.dirname(HERE), "sdk", "zlgcan"),
+    ]
+    found = []
+    seen = set()
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            key = os.path.normcase(os.path.abspath(path))
+            if key in seen or not os.path.isdir(path):
+                continue
+            seen.add(key)
+            found.append(path)
+    return found
+
+
 def find_sdk_dir(explicit=None):
-    """定位 zlgcan SDK 目录：显式配置 > 环境变量 > 默认目录 > 常见盘符下的 zlgcan* 目录。"""
-    candidates = [explicit, os.environ.get("CBSTUDIO_SDK_DIR"), SDK_DIR_HINT,
-                  DEFAULT_SDK_DIR]
+    """定位 zlgcan SDK 目录。
+
+    优先级：显式配置 > 环境变量 > 项目内随包的 ``sdk/zlgcan`` > 默认目录 >
+    各盘符下的 ``zlgcan*`` 目录。
+    """
+    candidates = [explicit, os.environ.get("CBSTUDIO_SDK_DIR"), SDK_DIR_HINT]
+    candidates += _project_sdk_dirs()
+    candidates.append(DEFAULT_SDK_DIR)
     for root in ("C:\\", "D:\\", "E:\\", "F:\\", os.path.expanduser("~")):
         try:
             for name in os.listdir(root):
@@ -115,8 +142,8 @@ def load_sdk(sdk_dir=None):
     若按默认导入顺序会先命中它。这里把 SDK 目录插到 ``sys.path`` 最前面，并清掉
     已缓存模块后再导入。
     """
-    candidates = [path for path in (sdk_dir, SDK_DIR_HINT, DEFAULT_SDK_DIR)
-                  if path and os.path.isdir(path)]
+    resolved = find_sdk_dir(sdk_dir)
+    candidates = [resolved] if resolved and os.path.isdir(resolved) else []
     for path in candidates:
         while path in sys.path:
             sys.path.remove(path)
@@ -929,8 +956,9 @@ class Engine(object):
 
 def main():
     """入口：握手 -> 读 stdin 命令 -> 逐条执行并回 ack。"""
+    resolved_sdk = find_sdk_dir(SDK_DIR_HINT) or ""
     try:
-        load_sdk()
+        load_sdk(resolved_sdk)
         sdk_ok = True
     except Exception as exc:
         sdk_ok = False
@@ -939,7 +967,7 @@ def main():
         sdk_error = ""
     emit({"ev": "hello", "py": sys.version.split()[0],
           "bits": 64 if sys.maxsize > 2 ** 32 else 32, "sdk": sdk_ok,
-          "sdk_error": sdk_error, "sdk_dir": SDK_DIR_HINT, "pid": os.getpid()})
+          "sdk_error": sdk_error, "sdk_dir": resolved_sdk, "pid": os.getpid()})
 
     engine = Engine()
     engine._transmit_type = None

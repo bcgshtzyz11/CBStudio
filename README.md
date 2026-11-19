@@ -25,9 +25,37 @@ run_studio.bat --no-browser --port 8800 --connect-can
 
 启动后自动打开 `http://127.0.0.1:8777/`（端口被占会自动顺延，控制台会打印实际地址）。
 
-**依赖**：工作台主进程用 64 位 Python（3.10+，本机 `py -3.14`），需要 `pyserial`；
-CAN 部分由 32 位 Python 3.8 子进程跑（ZLG SDK 只有 32 位 DLL），工作台自动拉起，
-无需手工启动。`openpyxl` 只在重新生成报文清单时需要。
+**依赖**：工作台主进程用 64 位 Python（3.10+，`pip install -r requirements.txt` 装 `pyserial`）；
+CAN 部分由 32 位 Python 3.8 子进程跑（ZLG SDK 只有 32 位 DLL），工作台会自动找解释器并拉起，
+无需手工启动。`zlgcan` 驱动已随包放在 `sdk/zlgcan/`，不用 pip 安装；`openpyxl` 只在重新生成
+报文清单时需要。
+
+---
+
+## 1.1 硬件自动识别
+
+配置里留空即「自动」，不用手工填口/型号/路径：
+
+| 项 | 配置 | 自动识别方式 |
+|---|---|---|
+| 继电器串口 | `relay.port = ""` | 枚举串口，优先 CH340（LCUS-4），跳过 DUT 调试口等占用口，逐个试开直到成功 |
+| ZLG 设备型号 | `can.device_type = 0` | 依次试 USBCANFD 家族与经典盒子，第一个能打开的即当前设备 |
+| 32 位解释器 | `can.python = ""` | 环境变量 `CBSTUDIO_PYTHON`/`CBSTUDIO_PY32` → `py -3.8-32` → 本机 `Python3*-32` / ZCANPRO 自带 `python38` → PATH 上的 `python`；拉起后按 hello 回报的位数筛掉 64 位 |
+| ZLG SDK 目录 | `can.sdk_dir = ""` | 环境变量 `CBSTUDIO_SDK_DIR` → 随包 `sdk/zlgcan` → 默认目录 → 各盘符下含 `zlgcan.dll` 的 `zlgcan*` 目录 |
+| 报文清单 | `can.manifest = "can_matrix_manifest.json"` | 相对路径按工作台目录解析，从任何目录启动都能找到；缺失时报出解析后的绝对路径 |
+| DUT 调试串口 | `probes.serial.port = ""` | 枚举串口，优先 Prolific/FTDI/CP210x（`067B`/`0403`/`10C4`），跳过继电器口，逐个按波特率试开 |
+| adb 路径 | `probes.adb.exe = ""` | PATH → 随包 `platform-tools/` → Android SDK（`ANDROID_HOME` / `%LOCALAPPDATA%\Android\Sdk`）→ 常见安装位置 |
+
+继电器口与 DUT 口互相排除，不会抢同一个口。识别结果写进日志与状态栏，例如：
+
+```
+自动识别 DUT 串口: COM4（自动识别 USB-UART(067B:2303) Prolific USB-to-Serial Comm Port）
+串口已打开 COM4 @460800
+继电器串口已打开 COM5 @9600
+已连接 USBCANFD-200U
+```
+
+想固定住就在设置里把对应项填死，填了就按配置走、不再自动。
 
 ---
 
@@ -304,6 +332,24 @@ server.py       HTTP + SSE
 ---
 
 ## 9. 版本
+
+v1.0.7 — 共通化适配（换机器 / 新 clone 直接能跑）：
+
+- **补回缺失的 `can_pack.py`**：`can_engine.py` 一 import 就报 `ModuleNotFoundError`，
+  CAN 在**任何**机器上都起不来。已随包入库。
+- **`zlgcan` SDK 随包入库**：`sdk/zlgcan/`（ctypes 绑定 + `zlgcan.dll` + `kerneldlls`），
+  不用再单独下 ZLG 的 Python 包；`find_sdk_dir()` 先找项目内的 `sdk/zlgcan`。
+- **32 位解释器自动识别**：`can.python` 留空即可——依次试 `py -3.8-32`、本机
+  `Python3*-32` 与 ZCANPRO 自带的 `python38`、PATH 上的 `python`，按子进程 hello
+  回报的位数筛掉 64 位；也可用环境变量 `CBSTUDIO_PYTHON` 强制指定。
+- **报文清单路径按工作台目录解析**：`can.manifest` 改成相对路径
+  `can_matrix_manifest.json`，不再依赖同事机器上的 `F:\…` 绝对路径；清单缺失时
+  直接报「报文清单不存在: <解析后的绝对路径>」。
+- **默认值不再写死别人的路径**：`relay.port` / `probes.serial.port` / `probes.adb.exe`
+  默认留空走自动识别；adb 探测增加随包 `platform-tools/` 与
+  `ANDROID_HOME` / `ANDROID_SDK_ROOT` / `%LOCALAPPDATA%\Android\Sdk`。
+- 新增 `requirements.txt`（`pyserial` 必需、`openpyxl` 仅重建清单时需要），
+  `使用说明.md` 可以直接照做。
 
 v1.0.4 — 仪表画面/电压检测 + 性能修复：
 

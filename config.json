@@ -61,7 +61,7 @@
   "sdk_dir": "",
   "device_type": 0,
   "stats_ms": 500,
-  "manifest": "F:\\s32k328_Gerrit\\s32k328\\S32K328\\S32K328_M7_0_0\\_tools\\can_random_tx\\can_matrix_manifest.json",
+  "manifest": "can_matrix_manifest.json",
   "channels": {
    "ican": {
     "ch": 0,
