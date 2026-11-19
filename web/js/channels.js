@@ -113,6 +113,16 @@ function renderProbes(snap) {
     ? (can.device && can.device.type ? can.device.type : 'ZLG') + ' · Python ' + (can.python || '?')
     : (canBusy ? (can.state === 'starting' ? '连接中…' : '断开中…')
       : (can.message && can.state === 'error' ? can.message : '已关闭（设备已释放）'));
+  const canRate = $('#probeCanRate');
+  if (canRate) {
+    if (!canRunning) {
+      canRate.textContent = '—';
+    } else {
+      const fps = Object.values(can.buses || {})
+        .reduce((sum, item) => sum + (item.rx_fps || 0), 0);
+      canRate.textContent = fps.toFixed(1) + ' 帧/s';
+    }
+  }
   const btn = $('#btnCanConnect');
   if (btn) {
     btn.textContent = canRunning ? '关闭' : (canBusy ? '处理中' : '开启');
