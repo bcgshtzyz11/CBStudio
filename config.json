@@ -77,14 +77,14 @@
     "boot_grace_ms": 25000,
     "serial": {
       "enabled": true,
-      "port": "COM4",
+      "port": "",
       "baud": 460800,
       "log_rate": 40
     },
     "adb": {
       "enabled": true,
       "interval_ms": 1000,
-      "exe": "F:\\BaiduNetdiskDownload\\platform-tools-latest-windows\\platform-tools\\adb.exe",
+      "exe": "",
       "log_path": "/userdata/log/mcu/mcu/mcu.log"
     },
     "rules": [

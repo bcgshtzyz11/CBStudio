@@ -66,8 +66,9 @@ class StudioApp(object):
                                simulate=self.simulate,
                                serial_online=self._sim_power_on,
                                adb_online=self._sim_soc_on)
-        # 继电器自动识别串口时，避开已经在用的口（DUT 调试口等）
+        # 继电器 / DUT 串口互相避开对方已占用的口
         self.relay.exclude_provider = self.ports_in_use
+        self.probes.serial.exclude_provider = self.relay_ports
         self.incidents = IncidentManager(self.config, self.bus, self.probes,
                                          self.channels, self.can)
         self.runner = Runner(self)
@@ -93,6 +94,11 @@ class StudioApp(object):
         self.read_regions = self._load_read_regions()
 
     # -- 仪表画面 ---------------------------------------------------------
+    def relay_ports(self):
+        """继电器占用的串口（DUT 串口自动识别时跳过）。"""
+        port = getattr(self.relay, "port", None)
+        return [port] if port else []
+
     def ports_in_use(self):
         """被其它用途占用的串口（继电器自动识别时避开）。"""
         used = []

@@ -66,8 +66,13 @@ DEFAULT_RULES = [
 class SerialProbe(object):
     """DUT 调试串口读取 + 解析 + 落盘。"""
 
+    # 常见 USB-UART 桥的 VID：Prolific / FTDI / CP210x 多用于 MCU 调试口
+    DUT_VIDS = ("067B", "0403", "10C4")
+
     def __init__(self, config, bus, on_line=None):
-        self.port = str(config.get("port") or "COM4")
+        self.port = str(config.get("port") or "").strip()
+        self.port_reason = ""
+        self.exclude_provider = None
         self.baud = int(config.get("baud") or 460800)
         self.enabled = bool(config.get("enabled", True))
         self.sample_rate = float(config.get("log_rate", 40.0))
@@ -149,9 +154,58 @@ class SerialProbe(object):
             self._close_port()
 
     # -- 内部 -------------------------------------------------------------
+    def _excluded_ports(self):
+        """被其它用途占用的串口（继电器、adb 适配器等），自动识别时跳过。"""
+        ports = set()
+        provider = self.exclude_provider
+        if provider:
+            try:
+                ports.update(str(p).upper() for p in (provider() or []) if p)
+            except Exception:
+                pass
+        return ports
+
+    def _detect_port(self):
+        """自动挑 DUT 调试口：优先 Prolific/FTDI/CP210x，其次其它 USB 串口，最后 CH340。"""
+        from .relay import list_serial_ports
+        used = self._excluded_ports()
+        ranked = []
+        for item in list_serial_ports():
+            if item["port"].upper() in used:
+                continue
+            hwid = (item["hwid"] + " " + item["desc"]).upper()
+            if any(vid in hwid for vid in self.DUT_VIDS):
+                score, why = 0, "自动识别 USB-UART(%s)" % item["hwid"].split("VID:PID=")[-1][:9]
+            elif "BTHENUM" in hwid or "蓝牙" in item["desc"]:
+                score, why = 9, "自动识别（蓝牙串口，最后才选）"
+            elif "1A86" in hwid or "CH340" in hwid:
+                score, why = 5, "自动识别 CH340（可能是继电器口）"
+            else:
+                score, why = 2, "自动识别 USB 串口"
+            ranked.append((score, item["port"], why, item["desc"]))
+        ranked.sort(key=lambda row: (row[0], row[1]))
+        for _score, port, why, desc in ranked:
+            try:
+                handle = serial.Serial(port, self.baud, timeout=0.2)
+                handle.close()
+                return port, "%s %s" % (why, desc or "")
+            except Exception:
+                continue
+        return None, "没有可用的调试串口（%d 个候选都打不开）" % len(ranked)
+
     def _open_port(self):
         """尝试打开串口；失败留给调用方重试。"""
         self.state = "opening"
+        if not self.port:
+            detected, reason = self._detect_port()
+            if not detected:
+                self.state = "error"
+                self.last_error = reason
+                self.message = reason
+                return False
+            self.port = detected
+            self.port_reason = reason
+            self._bus.info("serial", "自动识别 DUT 串口: %s（%s）" % (detected, reason))
         try:
             self._serial = serial.Serial(self.port, self.baud, timeout=0.2)
             self._serial.reset_input_buffer()
@@ -329,6 +383,7 @@ class SerialProbe(object):
                 "state": self.state,
                 "message": self.message,
                 "port": self.port,
+                "port_reason": self.port_reason,
                 "baud": self.baud,
                 "lines": self.lines,
                 "bytes": self.bytes,
@@ -361,7 +416,7 @@ class AdbProbe(object):
     """周期性采样 SOC 状态（1s 一次）；维护在线/日志增长状态机。"""
 
     def __init__(self, config, bus):
-        self.exe = config.get("exe") or adb_mod.DEFAULT_ADB
+        self.exe = adb_mod.find_adb(config.get("exe"))
         self.log_path = config.get("log_path") or adb_mod.DEFAULT_LOG_PATH
         self.interval = max(0.3, float(config.get("interval_ms", 1000)) / 1000.0)
         self.enabled = bool(config.get("enabled", True))
@@ -462,6 +517,7 @@ class AdbProbe(object):
             return {
                 "state": ("online" if self.online
                           else ("offline" if self.ever_online else "unknown")),
+                "exe": self.runner.exe_path,
                 "online": self.online,
                 "ever_online": self.ever_online,
                 "uptime_s": round(self.uptime, 1) if self.uptime is not None else None,
