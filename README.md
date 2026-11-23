@@ -9,26 +9,54 @@
 
 ## 1. 快速开始
 
+**双击 `CBStudio.exe`** 即可（不需要装 Python）。要传参数就在 cmd 里：
+
 ```bat
 :: 真机（会驱动继电器 / 打开 CAN 设备 / 占用 DUT 串口）
-run_studio.bat
+CBStudio.exe
 
 :: 台架被别人占着时：全模拟，不碰任何硬件
-run_studio.bat --sim
+CBStudio.exe --sim
 
 :: 只干跑继电器（其余真机）
-run_studio.bat --dry-run
+CBStudio.exe --dry-run
 
 :: 不开浏览器 / 换端口 / 启动就连 CAN
-run_studio.bat --no-browser --port 8800 --connect-can
+CBStudio.exe --no-browser --port 8800 --connect-can
+```
+
+想跑源码（改代码时）用原来的 bat，参数完全一样：
+
+```bat
+run_studio.bat          :: 等价于 python app.py
+run_studio.bat --sim
 ```
 
 启动后自动打开 `http://127.0.0.1:8777/`（端口被占会自动顺延，控制台会打印实际地址）。
 
-**依赖**：工作台主进程用 64 位 Python（3.10+，`pip install -r requirements.txt` 装 `pyserial`）；
-CAN 部分由 32 位 Python 3.8 子进程跑（ZLG SDK 只有 32 位 DLL），工作台会自动找解释器并拉起，
-无需手工启动。`zlgcan` 驱动已随包放在 `sdk/zlgcan/`，不用 pip 安装；`openpyxl` 只在重新生成
-报文清单时需要。
+**依赖**：
+
+- exe 版：主进程依赖打包进 `_internal\`，**免装 Python**；
+  只有 CAN 收发仍需要外部的 **32 位 Python 3.8**（ZLG SDK 只有 32 位 DLL），工作台会自动找并拉起；
+- 源码版：64 位 Python 3.10+，`pip install -r requirements.txt` 装 `pyserial`。
+
+两者都随包带 `sdk/zlgcan/`，不用 pip 安装 `zlgcan`；`openpyxl` 只在重新生成报文清单时需要。
+
+### 1.0.1 exe 的目录约定
+
+exe 与工程文件**同级**，所见即所改（改完不用重新打包）：
+
+```
+can_bench_studio\
+├─ CBStudio.exe          双击启动
+├─ _internal\            Python 运行时，必须和 exe 一起拷（单独拿 exe 起不来）
+├─ web\ scenarios\ config.json      外置，可现场改
+├─ can_engine.py can_pack.py sdk\    32 位子进程与 ZLG 驱动，外置
+└─ data\                 运行时生成（首次启动自动建）
+```
+
+发布 = **拷整个文件夹**。重新打包 = 双击 `build_exe.bat`（需要装 Python + PyInstaller，
+产物直接落在工程根目录）。
 
 ---
 
@@ -258,9 +286,13 @@ ACC（预开机）→ IG（开机）→ 收尾断电。真机实测 11 张卡全
 
 ```
 _tools/can_bench_studio/
-├─ app.py                入口（起服务、开浏览器）
-├─ run_studio.bat        双击启动
+├─ CBStudio.exe          exe 入口（免装 Python；`_internal\` 是它的运行时）
+├─ app.py                源码入口（起服务、开浏览器）
+├─ run_studio.bat        源码启动
+├─ build_exe.bat         重新打包 exe（PyInstaller，产物落在本目录）
+├─ cbstudio.spec         打包配置（单目录 / 控制台 / 前端可外置）
 ├─ can_engine.py         CAN 收发引擎（32 位 Python 子进程）
+├─ can_pack.py           报文位打包（can_engine.py 依赖，必须随 exe 一起放）
 ├─ config.json           配置（首次启动生成）
 ├─ scenarios/*.json      剧本
 ├─ studio/               后端模块（见下）

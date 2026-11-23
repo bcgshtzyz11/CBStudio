@@ -16,8 +16,10 @@ import os
 import struct
 import zlib
 
+from . import paths
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(os.path.dirname(HERE), "data")
+DATA_DIR = paths.DATA_DIR
 TEMPLATE_PATH = os.path.join(DATA_DIR, "glyph_templates.json")
 BOX_W, BOX_H = 16, 24
 MAX_DIST = 0.25          # 单字形置信度门槛（越小越像）

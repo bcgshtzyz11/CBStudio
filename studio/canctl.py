@@ -19,7 +19,9 @@ import sys
 import threading
 import time
 
-STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from . import paths
+
+STUDIO_DIR = paths.STUDIO_DIR
 ENGINE_PATH = os.path.join(STUDIO_DIR, "can_engine.py")
 
 DEFAULT_CAN_CONFIG = {

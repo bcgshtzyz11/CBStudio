@@ -22,6 +22,8 @@ import random
 import threading
 import time
 
+from . import paths
+
 DEFAULT_IDS = [
     ("0x18FEF117", 100, 8), ("0x18FFE117", 100, 8), ("0x18FFDA17", 200, 8),
     ("0x18FEF100", 100, 8), ("0x18FFE017", 500, 8), ("0x0CF00400", 20, 8),
@@ -123,9 +125,9 @@ class SimCanSupervisor(object):
         """载入清单并重建模拟报文表。"""
         options = opts or {}
         manifest = (path or (self._config or {}).get("manifest")
-                    or os.path.join(os.path.dirname(os.path.dirname(
-                        os.path.dirname(os.path.abspath(__file__)))),
-                        "can_random_tx", "can_matrix_manifest.json"))
+                    or os.path.join(paths.STUDIO_DIR, "can_matrix_manifest.json"))
+        if manifest and not os.path.isabs(manifest):
+            manifest = os.path.join(paths.STUDIO_DIR, manifest)
         messages = []
         try:
             with open(manifest, "r", encoding="utf-8") as handle:

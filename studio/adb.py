@@ -20,9 +20,11 @@ import tempfile
 import time
 import zlib
 
+from . import paths
+
 DEFAULT_ADB = ""            # 空 = 自动探测（PATH / 随包 platform-tools / 常见安装位置）
 DEFAULT_LOG_PATH = "/userdata/log/mcu/mcu/mcu.log"
-STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STUDIO_DIR = paths.STUDIO_DIR
 
 # 仪表主页面"蓄电池电压"数字所在的区域（按整帧比例），用于和基线做像素比对。
 # 960x360 缩略图上大致是 x 607..660 / y 330..348。

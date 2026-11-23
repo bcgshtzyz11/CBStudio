@@ -18,10 +18,36 @@
 import datetime
 import os
 import re
+import sys
 import time
 
-STUDIO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def app_dir():
+    """应用根目录（**唯一**的目录锚点）。
+
+    * 源码运行：``studio/`` 的上一级，即工程根目录；
+    * 打包成 exe（PyInstaller）：exe 所在目录 —— 也就是说 exe 放哪，
+      ``web/ sdk/ config.json scenarios/ can_engine.py`` 就按它旁边找。
+
+    打包后 ``__file__`` 落在 ``_internal/studio/`` 里，不能再用 ``__file__``
+    推工程目录，否则配置、剧本、SDK 全会指到包里。
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def bundle_dir():
+    """打包时随包解出的资源目录（源码运行 = 工程根目录）。"""
+    return getattr(sys, "_MEIPASS", None) or app_dir()
+
+
+STUDIO_DIR = app_dir()
 WEB_DIR = os.path.join(STUDIO_DIR, "web")
+if not os.path.isdir(WEB_DIR):                 # 前端默认外置；万一发布时漏了，退回包内副本
+    _bundled_web = os.path.join(bundle_dir(), "web")
+    if os.path.isdir(_bundled_web):
+        WEB_DIR = _bundled_web
 SCENARIO_DIR = os.path.join(STUDIO_DIR, "scenarios")
 DATA_DIR = os.path.join(STUDIO_DIR, "data")
 RUNS_DIR = os.path.join(DATA_DIR, "runs")
@@ -33,8 +59,10 @@ _SAFE = re.compile(r"[^0-9A-Za-z_.\-\u4e00-\u9fff]+")
 
 def ensure_dirs():
     """建立运行所需的目录（幂等）。"""
-    for path in (DATA_DIR, RUNS_DIR, SCENARIO_DIR, WEB_DIR):
+    for path in (DATA_DIR, RUNS_DIR, SCENARIO_DIR):
         os.makedirs(path, exist_ok=True)
+    if WEB_DIR.startswith(STUDIO_DIR):         # 包内前端（只读）不去创建
+        os.makedirs(WEB_DIR, exist_ok=True)
 
 
 def safe_name(text, fallback="item", limit=48):
