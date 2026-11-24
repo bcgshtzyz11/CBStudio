@@ -92,6 +92,7 @@ exe = EXE(
     upx=False,
     console=True,                 # 保留控制台窗口（排障用）
     version=VERSION_FILE,         # exe 属性里的版本号（取自 studio/studio_app.py）
+    icon=os.path.join(ROOT, 'assets', 'cbstudio.ico'),   # 由 scripts/make_icon.py 生成
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

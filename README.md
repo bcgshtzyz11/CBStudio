@@ -57,7 +57,8 @@ can_bench_studio\
 ├─ scenarios\ config.json    剧本与配置，外置，可现场改
 ├─ can_matrix_manifest.json  CAN 报文清单，外置
 ├─ data\                     运行时生成（首次启动自动建）
-├─ scripts\                  build_exe.bat + cbstudio.spec（打包用，日常不用管）
+├─ scripts\                  build_exe.bat + cbstudio.spec + make_icon.py（打包/图标，日常不用管）
+├─ assets\                   cbstudio.ico（exe 与窗口图标，多尺寸）
 ├─ docs\                     README 之外的文档与界面截图
 └─ requirements.txt          源码版的主进程依赖
 ```
@@ -305,7 +306,9 @@ can_bench_studio/
 │   └─ web/                   前端（原生 HTML/CSS/JS，无构建步骤）
 ├─ scripts/               打包与维护脚本
 │   ├─ build_exe.bat          重新打包 exe（PyInstaller）
-│   └─ cbstudio.spec          打包配置（单目录 / 控制台 / 前端可外置）
+│   ├─ cbstudio.spec          打包配置（单目录 / 控制台 / 图标 / 前端可外置）
+│   └─ make_icon.py           重新生成 assets/cbstudio.ico（多尺寸 + 预览图）
+├─ assets/cbstudio.ico    exe / 窗口图标（大尺寸带 CAN 总线，小尺寸纯字标）
 ├─ sdk/zlgcan/            ZLG 驱动（32 位子进程加载）
 ├─ scenarios/*.json       剧本
 ├─ config.json            配置（首次启动生成）
