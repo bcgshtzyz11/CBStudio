@@ -1,16 +1,26 @@
 # -*- coding: utf-8 -*-
 """paths.py — 工作台目录布局、运行编号与文件工具
 
-目录约定（全部落在 ``_tools/can_bench_studio/`` 下，已被工程 .gitignore 忽略）::
+两个锚点，其它一切由它们推导：
 
-    config.json              用户配置（通道 / CAN / 探针 / 保留策略）
-    scenarios/*.json         剧本（可拖动排序的状态序列）
-    data/runs/<run_id>/      一次运行的落盘目录
-        events.jsonl             全部结构化日志（可回放）
-        serial.log               DUT 调试串口原始文本
-        incidents/<n>_<reason>/ 现场保全目录（快照 + 说明）
-        report.html             运行报告（导出）
-    data/studio.log          服务端自身日志
+``STUDIO_DIR``  工程根（配置 / 剧本 / 数据 / SDK / 双击的 exe 都在这层）::
+
+    CBStudio.exe             双击入口（打包产物）
+    _internal/               打包运行时
+    run_studio.bat           源码启动
+    src/                     源码（app.py / studio / can_engine.py / web）
+    sdk/ scenarios/ config.json can_matrix_manifest.json
+    data/                    运行时生成
+
+``SRC_DIR``     源码目录（``app.py / studio/ / can_engine.py / can_pack.py / web/``）。
+    老版本把源码平铺在根目录，这里做兼容：根下有 ``src/`` 就用它，否则退回根目录。
+
+运行产物（``data/runs/<run_id>/``）::
+
+    events.jsonl             全部结构化日志（可回放）
+    serial.log               DUT 调试串口原始文本
+    incidents/<n>_<reason>/  现场保全目录（快照 + 说明）
+    report.html              运行报告（导出）
 
 ``run_id`` 形如 ``20261117-184501-r01``：日期-时间-序号，天然按时间排序。
 """
@@ -23,18 +33,18 @@ import time
 
 
 def app_dir():
-    """应用根目录（**唯一**的目录锚点）。
+    """工程根目录（**唯一**的目录锚点）。
 
-    * 源码运行：``studio/`` 的上一级，即工程根目录；
-    * 打包成 exe（PyInstaller）：exe 所在目录 —— 也就是说 exe 放哪，
-      ``web/ sdk/ config.json scenarios/ can_engine.py`` 就按它旁边找。
+    * 源码运行：``src/studio/`` 往上三层，即工程根；
+    * 打包成 exe（PyInstaller）：exe 所在目录 —— exe 放哪，
+      ``sdk/ scenarios/ config.json data/`` 就按它旁边找。
 
-    打包后 ``__file__`` 落在 ``_internal/studio/`` 里，不能再用 ``__file__``
+    打包后 ``__file__`` 落在 ``_internal/ studio/`` 里，不能再用 ``__file__``
     推工程目录，否则配置、剧本、SDK 全会指到包里。
     """
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def bundle_dir():
@@ -42,12 +52,25 @@ def bundle_dir():
     return getattr(sys, "_MEIPASS", None) or app_dir()
 
 
+def src_dir():
+    """源码目录：``<根>/src``，没有就退回根目录（兼容老结构）。"""
+    candidate = os.path.join(app_dir(), "src")
+    return candidate if os.path.isdir(candidate) else app_dir()
+
+
+def app_file(name):
+    """按「源码目录 → 根目录 → 包内」的顺序找一个随包文件，返回首个存在的。"""
+    for base in (src_dir(), app_dir(), bundle_dir()):
+        path = os.path.join(base, name)
+        if os.path.exists(path):
+            return path
+    return os.path.join(src_dir(), name)
+
+
 STUDIO_DIR = app_dir()
-WEB_DIR = os.path.join(STUDIO_DIR, "web")
-if not os.path.isdir(WEB_DIR):                 # 前端默认外置；万一发布时漏了，退回包内副本
-    _bundled_web = os.path.join(bundle_dir(), "web")
-    if os.path.isdir(_bundled_web):
-        WEB_DIR = _bundled_web
+SRC_DIR = src_dir()
+# 前端：先找外置（src/web），再兼容老结构（根/web），最后用包内副本
+WEB_DIR = app_file("web")
 SCENARIO_DIR = os.path.join(STUDIO_DIR, "scenarios")
 DATA_DIR = os.path.join(STUDIO_DIR, "data")
 RUNS_DIR = os.path.join(DATA_DIR, "runs")

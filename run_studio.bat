@@ -22,16 +22,17 @@ goto run
 
 :nopy
 echo [!] Python 3 not found. Install Python 3.10+ and add it to PATH.
+echo     （只想双击启动的话，用 CBStudio.exe，不需要 Python）
 pause
 exit /b 1
 
 :run
 echo ============================================================
-echo   CBStudio - Bench Scenario Studio
+echo   CBStudio - Bench Scenario Studio  (source mode)
 echo   URL: http://127.0.0.1:8777/
 echo   Bench busy? use:  run_studio.bat --sim
 echo ============================================================
 echo.
-%PYCMD% app.py %*
+%PYCMD% "src\app.py" %*
 if errorlevel 1 pause
 endlocal

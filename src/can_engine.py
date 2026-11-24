@@ -43,8 +43,8 @@ import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CAN_TX_DIR = os.path.join(os.path.dirname(HERE), "can_random_tx")
-for _path in (HERE, CAN_TX_DIR):
+PARENT = os.path.dirname(HERE)
+for _path in (HERE, PARENT):          # HERE 用于 import can_pack，PARENT 兼容老结构
     if _path not in sys.path:
         sys.path.insert(0, _path)
 

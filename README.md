@@ -28,7 +28,7 @@ CBStudio.exe --no-browser --port 8800 --connect-can
 想跑源码（改代码时）用原来的 bat，参数完全一样：
 
 ```bat
-run_studio.bat          :: 等价于 python app.py
+run_studio.bat          :: 等价于 python src\app.py
 run_studio.bat --sim
 ```
 
@@ -42,21 +42,28 @@ run_studio.bat --sim
 
 两者都随包带 `sdk/zlgcan/`，不用 pip 安装 `zlgcan`；`openpyxl` 只在重新生成报文清单时需要。
 
-### 1.0.1 exe 的目录约定
+### 1.0.1 目录约定
 
-exe 与工程文件**同级**，所见即所改（改完不用重新打包）：
+**exe 与资源同级，源码单独放 `src/`**，所见即所改（改完不用重新打包）：
 
 ```
 can_bench_studio\
-├─ CBStudio.exe          双击启动
-├─ _internal\            Python 运行时，必须和 exe 一起拷（单独拿 exe 起不来）
-├─ web\ scenarios\ config.json      外置，可现场改
-├─ can_engine.py can_pack.py sdk\    32 位子进程与 ZLG 驱动，外置
-└─ data\                 运行时生成（首次启动自动建）
+├─ CBStudio.exe              双击启动
+├─ _internal\                Python 运行时，必须和 exe 一起拷（单独拿 exe 起不来）
+├─ run_studio.bat            源码启动（开发用，等价于 python src\app.py）
+├─ run_sim.bat               仿真模式快捷方式
+├─ src\                      源码：app.py / studio\ / can_engine.py / can_pack.py / web\
+├─ sdk\                      ZLG 驱动（32 位子进程用），外置
+├─ scenarios\ config.json    剧本与配置，外置，可现场改
+├─ can_matrix_manifest.json  CAN 报文清单，外置
+├─ data\                     运行时生成（首次启动自动建）
+├─ scripts\                  build_exe.bat + cbstudio.spec（打包用，日常不用管）
+├─ docs\                     README 之外的文档与界面截图
+└─ requirements.txt          源码版的主进程依赖
 ```
 
-发布 = **拷整个文件夹**。重新打包 = 双击 `build_exe.bat`（需要装 Python + PyInstaller，
-产物直接落在工程根目录）。
+发布 = **拷整个文件夹**（exe + `_internal` + 其余资源）。重新打包 = 跑
+`scripts\build_exe.bat`（需要 Python + PyInstaller，产物落在工程根目录）。
 
 ---
 
@@ -285,22 +292,29 @@ ACC（预开机）→ IG（开机）→ 收尾断电。真机实测 11 张卡全
 ## 6. 目录与数据
 
 ```
-_tools/can_bench_studio/
-├─ CBStudio.exe          exe 入口（免装 Python；`_internal\` 是它的运行时）
-├─ app.py                源码入口（起服务、开浏览器）
-├─ run_studio.bat        源码启动
-├─ build_exe.bat         重新打包 exe（PyInstaller，产物落在本目录）
-├─ cbstudio.spec         打包配置（单目录 / 控制台 / 前端可外置）
-├─ can_engine.py         CAN 收发引擎（32 位 Python 子进程）
-├─ can_pack.py           报文位打包（can_engine.py 依赖，必须随 exe 一起放）
-├─ config.json           配置（首次启动生成）
-├─ scenarios/*.json      剧本
-├─ studio/               后端模块（见下）
-├─ web/                  前端（原生 HTML/CSS/JS，无构建步骤）
-├─ docs/                 界面截图
-├─ _dev/                 开发自检脚本（CDP 截图 / 页面探针，不参与运行）
-└─ data/runs/<run_id>/   每次运行：events.jsonl / serial.log / can_rx.csv / incidents/ / run.json
+can_bench_studio/
+├─ CBStudio.exe           exe 入口（免装 Python；`_internal\` 是它的运行时）
+├─ _internal/             打包的 Python 运行时（生成物，跟着 exe 走）
+├─ run_studio.bat         源码启动（开发用）
+├─ run_sim.bat            仿真模式快捷方式
+├─ src/                   源码
+│   ├─ app.py                 入口（起服务、开浏览器）
+│   ├─ studio/                后端模块（见下）
+│   ├─ can_engine.py          CAN 收发引擎（32 位 Python 子进程）
+│   ├─ can_pack.py            报文位打包（can_engine.py 依赖）
+│   └─ web/                   前端（原生 HTML/CSS/JS，无构建步骤）
+├─ scripts/               打包与维护脚本
+│   ├─ build_exe.bat          重新打包 exe（PyInstaller）
+│   └─ cbstudio.spec          打包配置（单目录 / 控制台 / 前端可外置）
+├─ sdk/zlgcan/            ZLG 驱动（32 位子进程加载）
+├─ scenarios/*.json       剧本
+├─ config.json            配置（首次启动生成）
+├─ can_matrix_manifest.json   CAN 报文清单
+├─ data/runs/<run_id>/    每次运行：events.jsonl / serial.log / can_rx.csv / incidents/ / run.json
+└─ docs/                  使用说明 + 界面截图（docs/screenshots/）
 ```
+
+`_dev/`（开发自检脚本，CDP 截图 / 页面探针）不参与运行，本地存在但未入库。
 
 后端模块：
 
@@ -441,7 +455,7 @@ v1.0.1 — 真机联调修正：
 v1.0.0 — 首版：通道控制、剧本编排（拖动排序/循环）、串口+adb+CAN 抓取、
 五类监看规则、现场保全与历史目录、全模拟彩排模式。
 
-界面截图见 `docs/`：
+界面截图见 `docs/screenshots/`：
 
 - `01-主界面.png` 空闲态（通道 / 剧本 / 日志三栏）
 - `02-运行中.png` 第 2 轮运行中，当前状态高亮、每张卡有通过/失败计数

@@ -3,32 +3,34 @@
 
 形态（与现场约定一致）：
 
-* **单目录**：产出 ``CBStudio.exe`` + ``_internal/``（Python 运行时），
-  exe 与 ``web/ sdk/ scenarios/ config.json can_engine.py`` 同级；
+* **单目录**：产出 ``CBStudio.exe`` + ``_internal/``（Python 运行时），放在工程根目录，
+  与 ``src/ sdk/ scenarios/ config.json data/`` 同级；
 * **保留控制台**：双击能看到地址/串口/CAN 状态与报错，Ctrl+C 退出；
-* **外置可改**：``web/ scenarios/ config.json data/ sdk/ can_engine.py`` 全部留在
-  exe 外面，现场改配置、改前端、换 SDK 都不用重新打包；
-  其中 ``web/`` 也顺手打进包里做兜底（外置缺失时才用包内副本）。
+* **外置可改**：``src/web`` ``scenarios`` ``config.json`` ``data`` ``sdk``
+  ``src/can_engine.py`` 全部留在 exe 外面，现场改配置、改前端、换 SDK 都不用重新打包；
+  其中 ``src/web/`` 也顺手打进包里做兜底（外置缺失时才用包内副本）。
 
 不打包的东西及原因：
 
-* ``can_engine.py``：必须由**外部 32 位 Python** 当脚本执行（ZLG SDK 只有 32 位 DLL），
+* ``src/can_engine.py``：必须由**外部 32 位 Python** 当脚本执行（ZLG SDK 只有 32 位 DLL），
   冻进 exe 后子进程就找不到了，所以它留在磁盘上；
 * ``sdk/zlgcan``：驱动 DLL + kerneldlls，被 32 位子进程按目录加载；
 * ``platform-tools/adb.exe``、32 位解释器：外部工具，按需另放。
 
-构建：``build_exe.bat``（内部就是 ``pyinstaller cbstudio.spec``）。
+构建：``scripts/build_exe.bat``（内部就是 ``pyinstaller scripts/cbstudio.spec``）。
 """
 
 import os
 import re
 
-ROOT = os.path.abspath(SPECPATH)
+HERE = os.path.abspath(SPECPATH)                 # <根>/scripts
+ROOT = os.path.dirname(HERE)                     # 工程根
+SRC = os.path.join(ROOT, 'src')
 
 
 def _read_version():
     """从源码里取版本号，避免 exe 属性与界面版本号各写一份。"""
-    with open(os.path.join(ROOT, 'studio', 'studio_app.py'), encoding='utf-8') as handle:
+    with open(os.path.join(SRC, 'studio', 'studio_app.py'), encoding='utf-8') as handle:
         match = re.search(r'^VERSION\s*=\s*"([^"]+)"', handle.read(), re.M)
     return match.group(1) if match else '0.0.0'
 
@@ -57,11 +59,11 @@ with open(VERSION_FILE, 'w', encoding='utf-8') as _handle:
 ''' % (tuple(_quad), tuple(_quad), VERSION, VERSION))
 
 a = Analysis(
-    [os.path.join(ROOT, 'app.py')],
-    pathex=[ROOT],
+    [os.path.join(SRC, 'app.py')],
+    pathex=[SRC],
     binaries=[],
-    # 前端兜底副本（外置 web/ 存在时不会被用到）
-    datas=[(os.path.join(ROOT, 'web'), 'web')],
+    # 前端兜底副本（外置 src/web 存在时不会被用到）
+    datas=[(os.path.join(SRC, 'web'), 'web')],
     hiddenimports=[
         'serial',
         'serial.tools',

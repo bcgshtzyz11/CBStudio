@@ -18,7 +18,6 @@ import zlib
 
 from . import paths
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = paths.DATA_DIR
 TEMPLATE_PATH = os.path.join(DATA_DIR, "glyph_templates.json")
 BOX_W, BOX_H = 16, 24

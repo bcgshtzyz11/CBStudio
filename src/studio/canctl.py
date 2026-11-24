@@ -22,7 +22,8 @@ import time
 from . import paths
 
 STUDIO_DIR = paths.STUDIO_DIR
-ENGINE_PATH = os.path.join(STUDIO_DIR, "can_engine.py")
+# 32 位引擎脚本在源码目录（src/can_engine.py）；老结构平铺在根目录也能找到
+ENGINE_PATH = paths.app_file("can_engine.py")
 
 DEFAULT_CAN_CONFIG = {
     "enabled": True,
