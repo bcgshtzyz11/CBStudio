@@ -1,0 +1,10 @@
+# 换行符约定：批处理必须是 CRLF，否则 cmd 解析 goto/标签会错乱
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+# 其余文本按仓库默认（core.autocrlf 决定），Python/JS/CSS 混用不影响运行
+*.py   text
+*.js   text
+*.css  text
+*.html text
+*.md   text
+*.json text
